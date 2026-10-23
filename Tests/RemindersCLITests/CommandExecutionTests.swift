@@ -36,7 +36,8 @@ private struct Harness {
 
   /// The exit status: 0, or the status of the `ExitCode` the command threw.
   func run(
-    _ arguments: [String], store override: (any ReminderStore)? = nil, system: any SystemProbe = MacSystemProbe()
+    _ arguments: [String], store override: (any ReminderStore)? = nil, system: any SystemProbe = MacSystemProbe(),
+    setup: SetupEnvironment? = nil
   ) async throws -> Int32 {
     let parsed = try RemindersCommand.parseAsRoot(arguments)
     let command = try #require(parsed as? any ConsoleCommand)
@@ -46,7 +47,7 @@ private struct Harness {
         format: json ? .json : .text, renderer: TextRenderer(clock: .init(now: .now, timeZone: .gmt)),
         output: output, errors: errors),
       service: RemindersService(store: override ?? store, clock: DayClock(timeZone: .gmt)),
-      system: system)
+      system: system, setup: setup ?? .live())
     do {
       try await command.execute(in: context)
       return 0

@@ -6,7 +6,8 @@ assistants.
 
 > **Status: lists and reminders work; sections are next.** `lists`, `list`, `today`, `overdue`, `upcoming`,
 > `search`, `add`, `complete`, `update`, `delete`, `create-list`, `delete-list`, `authorize` and `doctor` work
-> against Apple Reminders through EventKit, from the command line and as MCP tools. Section commands, tools and
+> against Apple Reminders through EventKit, from the command line and as MCP tools; `setup-claude`,
+> `setup-claude-code` and `setup-cursor` register the MCP server with those clients. Section commands, tools and
 > `--section` options, and `demo`, arrive in follow-up PRs; until then they fail with a structured
 > `NOT_IMPLEMENTED` error.
 
@@ -47,8 +48,9 @@ macOS 26 or later and runs natively on Apple silicon and Intel (a universal bina
 - The **first run asks for Reminders access**. Run under an MCP client such as Claude Desktop, the prompt and
   the System Settings entry say `reminders`. Run from Terminal, they name the terminal app (see
   [Reminders permission](#reminders-permission)). `reminders authorize` triggers the prompt on purpose.
-- For an MCP client, use the absolute path from `brew --prefix`, such as `/opt/homebrew/bin/reminders --mcp`
-  (see [MCP server](#mcp-server)).
+- To use it from an MCP client, run `reminders setup-claude`, `reminders setup-claude-code` or
+  `reminders setup-cursor` (see [MCP server](#mcp-server)). They register the stable
+  `$(brew --prefix)/opt/reminders/bin/reminders`, so upgrades don't break the client's config.
 
 Releases are built by [`.github/workflows/release.yml`](.github/workflows/release.yml) from `v*` tags. Each one
 has `reminders-<version>-macos-universal.tar.gz` (the binary, LICENSE and README) and its `.sha256`. The formula
@@ -130,6 +132,38 @@ mise run format    # swift format --in-place
 assistants can manage reminders without shell access. Point your client at the binary with an **absolute path**,
 because desktop apps don't see your shell's `PATH`.
 
+### Setting up a client
+
+These commands register a server named `reminders` that runs this binary with `--mcp`:
+
+```sh
+reminders setup-claude                    # Claude Desktop
+reminders setup-claude-code               # Claude Code, user scope (--scope local|project for this directory)
+reminders setup-cursor                    # Cursor, every project (--project <dir> for one project)
+```
+
+- **Path.** The command is the running binary's absolute path with symlinks resolved. For a Homebrew install,
+  which lives in a versioned `Cellar` directory that upgrades delete, it's
+  `$(brew --prefix)/opt/reminders/bin/reminders` instead (or `$(brew --prefix)/bin/reminders`).
+- **Merging.** Claude Desktop's `~/Library/Application Support/Claude/claude_desktop_config.json` and Cursor's
+  `~/.cursor/mcp.json` (or `<dir>/.cursor/mcp.json`) are edited in place: other servers and settings, their order
+  and the file's indentation are kept. The file and its folder are created when missing. Before a change the
+  original is copied to `<file>.bak-<YYYYMMDD-HHMMSS>`, and the new file is written atomically. A file that isn't
+  valid JSON is left alone and reported with its line and column (`CONFIG_INVALID`).
+- **Claude Code** owns its config, so `setup-claude-code` runs
+  `claude mcp add --transport stdio --scope user reminders -- <binary> --mcp`. Without `claude` on `PATH` it prints
+  that command instead.
+- **Running it again** changes nothing when the same server is registered. A different `reminders` server is
+  reported (`CONFIG_CONFLICT`) and replaced only with `--force`.
+- **`--dry-run`** shows the change (the new file, or the `claude` commands) without making it; **`--remove`**
+  takes the server out again (a different one only with `--force`); **`--json`** reports what happened as
+  `{"outcome": "added" | "replaced" | "unchanged" | "removed" | "absent" | "manual", "configPath", "backupPath", …}`.
+- Each command ends with the next step (restart Claude Desktop, start a new Claude Code session, restart Cursor)
+  and a note on the Reminders permission prompt (see **Permission** below). `setup-claude` and `setup-cursor` take
+  `--config <file>` to edit another file, for testing.
+
+### Configuring a client by hand
+
 **Claude Desktop**: edit `~/Library/Application Support/Claude/claude_desktop_config.json` (Settings ›
 Developer › Edit Config), then restart Claude:
 
@@ -144,9 +178,10 @@ Developer › Edit Config), then restart Claude:
 }
 ```
 
-**Claude Code**: `claude mcp add reminders -- /usr/local/bin/reminders --mcp`
+**Claude Code**: `claude mcp add --transport stdio --scope user reminders -- /usr/local/bin/reminders --mcp`
 
-**Cursor**: add the same `mcpServers` entry to `~/.cursor/mcp.json` (or `.cursor/mcp.json` in a project).
+**Cursor**: add the same `mcpServers` entry, with `"type": "stdio"`, to `~/.cursor/mcp.json` (or
+`.cursor/mcp.json` in a project).
 
 **Other clients** (VS Code, Zed, Windsurf, …): register a stdio server whose command is the binary and whose only
 argument is `--mcp`.
@@ -214,6 +249,11 @@ Five targets with one-way dependencies (`RemindersCLI` → `RemindersMCP`, `Remi
     counts, the today/overdue/upcoming/search filters and the changes. It returns `ConsoleRepresentable` values.
   - `Diagnostics/`: `doctor`'s checks and `authorize`'s steps, against a `SystemProbe` (macOS version, embedded
     Info.plist, database directory, opening System Settings).
+  - `MCPSetup/`: the setup commands. `MCPConfigDocument` merges the `reminders` entry into a client's
+    `mcpServers`, `ConfigFile` backs up and atomically replaces the file, `ExecutableLocation` picks a path that
+    survives Homebrew upgrades, and `ClaudeCodeRegistration` builds the `claude mcp` commands, run through a
+    `CommandRunner`. Paths come from a `SetupEnvironment` (home, current directory, binary, `PATH`), so all of it
+    is tested on Linux in temporary directories.
   - `RemindersError`: one error type with stable machine-readable codes; core APIs use typed throws.
 - **`RemindersApple`**: the platform. `EventKitReminderStore` is an actor that owns the `EKEventStore`;
   EventKit objects never leave it (fetches convert to `Reminder` values, changes look items up by identifier).
@@ -281,7 +321,8 @@ tool. Intentional differences:
   `completions` is reported by the argument parser with exit status 64.
 - **Error codes.** Unknown sections report `SECTION_NOT_FOUND` (not `LIST_NOT_FOUND`). Unported commands and
   options report `NOT_IMPLEMENTED`, including `list --section` (which the original accepted but ignored). Failed
-  EventKit saves and removals report `STORE_FAILURE`. Reminders commands on a platform without Apple Reminders
+  EventKit saves and removals report `STORE_FAILURE`. The setup commands report `CONFIG_INVALID`,
+  `CONFIG_CONFLICT` and `SETUP_FAILED`. Reminders commands on a platform without Apple Reminders
   report `UNSUPPORTED_PLATFORM`.
 - **Permissions.** `doctor` never shows the permission prompt. It reports each access state separately (not
   requested yet, denied, restricted, write-only, granted) and names what holds the permission (an app, or

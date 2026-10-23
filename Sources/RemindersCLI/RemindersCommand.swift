@@ -16,6 +16,7 @@ struct RemindersCommand: AsyncParsableCommand {
       Add.self, Complete.self, Update.self, Delete.self,
       Sections.self, Move.self, CreateSection.self, DeleteSection.self,
       CreateList.self, DeleteList.self,
+      SetupClaude.self, SetupClaudeCode.self, SetupCursor.self,
       Demo.self, Authorize.self, Doctor.self, Completions.self,
     ]
   )

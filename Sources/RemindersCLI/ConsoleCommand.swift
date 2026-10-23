@@ -16,6 +16,8 @@ struct CommandContext: Sendable {
   var console: Console
   var service: RemindersService
   var system: any SystemProbe
+  /// Home, binary and `PATH` for the setup commands.
+  var setup: SetupEnvironment = .live()
 
   /// The real thing: stdout/stderr, the platform's Reminders store and this machine.
   static func live(_ globals: GlobalOptions) -> CommandContext {

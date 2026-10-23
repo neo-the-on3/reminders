@@ -65,9 +65,10 @@ public enum ReminderTool: String, CaseIterable, Sendable {
     case .createList: "Create a new reminder list (idempotent: an existing list with that exact name is reused)"
     case .deleteList: "Delete a reminder list and all of its reminders"
     case .add: "Add a reminder to a list with optional due date, priority, notes and recurrence"
-    case .complete: "Mark a reminder as complete (supports fuzzy title matching)"
-    case .delete: "Delete a reminder"
-    case .update: "Update a reminder's title, due date, priority or notes"
+    case .complete: "Mark a reminder as complete, found by title (fuzzy matched) or ID prefix"
+    case .delete: "Delete a reminder, found by title (fuzzy matched) or ID prefix"
+    case .update:
+      "Update a reminder's title, due date, priority or notes; find it by title (fuzzy matched) or ID prefix"
     case .sections: "List sections in a reminder list (not implemented yet)"
     case .createSection: "Create a section in a list (not implemented yet)"
     case .deleteSection: "Delete a section from a list (not implemented yet)"
@@ -84,8 +85,8 @@ public enum ReminderTool: String, CaseIterable, Sendable {
   private static let listArgument = JSONSchema.string(
     "List name (fuzzy match: 'groceries' finds 'Groceries / Shopping List')")
   private static let titleArgument = JSONSchema.string(
-    "Reminder title (fuzzy match: 'sour' finds 'sourdough bread')")
-  private static let idArgument = JSONSchema.string("Match by reminder ID prefix instead of title")
+    "Reminder title (fuzzy match: 'sour' finds 'sourdough bread'). Give this or id")
+  private static let idArgument = JSONSchema.string("Reminder ID prefix, instead of title. Give this or title")
   private static let dueArgument = JSONSchema.string(
     "Due date: YYYY-MM-DD or natural language ('tomorrow', 'next friday', 'in 3 days')")
   private static let priorityArgument = JSONSchema.oneOf(Priority.allCases.map(\.rawValue), "Priority level")
@@ -110,16 +111,19 @@ public enum ReminderTool: String, CaseIterable, Sendable {
           "due": Self.dueArgument, "priority": Self.priorityArgument, "notes": JSONSchema.string("Reminder notes"),
           "repeat": JSONSchema.string("Recurrence: 'daily', 'weekly', 'every 2 weeks', 'monthly', 'weekly on mon,fri'"),
         ], required: ["list", "title"])
+    // `title` or `id` names the reminder. Neither is marked required, because some clients reject a top-level
+    // anyOf; the toolbox checks that one of them is given.
     case .complete, .delete:
       return JSONSchema.object(
-        ["list": Self.listArgument, "title": Self.titleArgument, "id": Self.idArgument], required: ["list", "title"])
+        ["list": Self.listArgument, "title": Self.titleArgument, "id": Self.idArgument], required: ["list"])
     case .update:
       return JSONSchema.object(
         [
-          "list": Self.listArgument, "title": Self.titleArgument, "newTitle": JSONSchema.string("New title"),
-          "due": Self.dueArgument, "clearDue": JSONSchema.boolean("Remove the due date"),
-          "priority": Self.priorityArgument, "notes": JSONSchema.string("New notes"),
-        ], required: ["list", "title"])
+          "list": Self.listArgument, "title": Self.titleArgument, "id": Self.idArgument,
+          "newTitle": JSONSchema.string("New title"), "due": Self.dueArgument,
+          "clearDue": JSONSchema.boolean("Remove the due date"), "priority": Self.priorityArgument,
+          "notes": JSONSchema.string("New notes"),
+        ], required: ["list"])
     case .createSection:
       return JSONSchema.object(
         ["list": Self.listArgument, "name": JSONSchema.string("Section name")], required: ["list", "name"])
@@ -157,7 +161,7 @@ public enum ReminderTool: String, CaseIterable, Sendable {
     [
       "id": JSONSchema.string("List identifier"), "title": JSONSchema.string("List name"),
       "reminderCount": JSONSchema.integer("Incomplete reminders"),
-      "overdueCount": JSONSchema.integer("Incomplete reminders whose due day has started"),
+      "overdueCount": JSONSchema.integer("Incomplete reminders due before today"),
     ], required: ["id", "title", "reminderCount", "overdueCount"])
 
   private static let reminderSchema = JSONSchema.record(

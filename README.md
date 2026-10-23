@@ -159,7 +159,8 @@ reminders setup-cursor                    # Cursor, every project (--project <di
   takes the server out again (a different one only with `--force`); **`--json`** reports what happened as
   `{"outcome": "added" | "replaced" | "unchanged" | "removed" | "absent" | "manual", "configPath", "backupPath", …}`.
 - Each command ends with the next step (restart Claude Desktop, start a new Claude Code session, restart Cursor)
-  and a note on the Reminders permission prompt (see **Permission** below). `setup-claude` and `setup-cursor` take
+  and a note on the Reminders permission prompt for that app: Claude Desktop's names `reminders`, Cursor's names
+  Cursor, and Claude Code's names the app it runs in (see **Permission** below). `setup-claude` and `setup-cursor` take
   `--config <file>` to edit another file, for testing.
 
 ### Configuring a client by hand
@@ -194,8 +195,8 @@ scripts/mcp-session.sh .build/release/reminders reminders_lists '{}' reminders_t
 ```
 
 **Permission.** macOS assigns Reminders access to the server's responsible process. Claude Desktop leaves that
-to the server, so the prompt names `reminders` itself; clients that take responsibility (an app's built-in
-terminal, for example) get the prompt in their own name. If tools report `PERMISSION_DENIED`, the error names
+to the server, so the prompt names `reminders` itself; clients that take responsibility get the prompt in their
+own name: Cursor, or for Claude Code the terminal app it runs in. If tools report `PERMISSION_DENIED`, the error names
 whichever it is: allow it under System Settings › Privacy & Security › Reminders, then restart the client. A
 client that can't show the prompt gets an error saying macOS didn't show it.
 

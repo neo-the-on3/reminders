@@ -84,6 +84,19 @@ struct LifecycleTests {
 
 // MARK: - Driving the binary
 
+/// The `reminders` binary under test: REMINDERS_BINARY, or the build `swift test` made.
+func remindersBinary() throws -> URL {
+  if let path = ProcessInfo.processInfo.environment["REMINDERS_BINARY"], !path.isEmpty {
+    return URL(filePath: path)
+  }
+  let root = URL(filePath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+    .deletingLastPathComponent()
+  return try #require(
+    ["debug", "release"].map { root.appending(path: ".build/\($0)/reminders") }
+      .first { FileManager.default.isExecutableFile(atPath: $0.path) },
+    "Build reminders first or set REMINDERS_BINARY")
+}
+
 private struct Envelope<Payload: Decodable>: Decodable {
   var success: Bool
   var data: Payload
@@ -121,17 +134,7 @@ private struct CLI {
   let binary: URL
 
   init() throws {
-    let environment = ProcessInfo.processInfo.environment
-    if let path = environment["REMINDERS_BINARY"], !path.isEmpty {
-      binary = URL(filePath: path)
-    } else {
-      let root = URL(filePath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
-        .deletingLastPathComponent()
-      binary = try #require(
-        ["debug", "release"].map { root.appending(path: ".build/\($0)/reminders") }
-          .first { FileManager.default.isExecutableFile(atPath: $0.path) },
-        "Build reminders first or set REMINDERS_BINARY")
-    }
+    binary = try remindersBinary()
   }
 
   /// `reminders <arguments> --json`, decoding the `data` of its success envelope.

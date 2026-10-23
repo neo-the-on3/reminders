@@ -44,6 +44,8 @@ let package = Package(
     ),
     .testTarget(name: "RemindersCoreTests", dependencies: ["RemindersCore"]),
     .testTarget(name: "RemindersCLITests", dependencies: ["RemindersCLI", "RemindersCore"]),
+    // Opt-in (REMINDERS_INTEGRATION=1): drives the built binary against Apple Reminders in a throwaway list.
+    .testTarget(name: "RemindersIntegrationTests", dependencies: ["RemindersCLI"]),
   ],
   swiftLanguageModes: [.v6]
 )

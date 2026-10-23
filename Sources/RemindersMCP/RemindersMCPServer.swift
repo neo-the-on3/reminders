@@ -1,0 +1,38 @@
+import MCP
+import RemindersCore
+
+/// The `reminders --mcp` server: the ``ReminderTool``s over any MCP transport (stdio for clients such as Claude).
+public struct RemindersMCPServer: Sendable {
+  public var toolbox: RemindersToolbox
+
+  public init(service: RemindersService) {
+    toolbox = RemindersToolbox(service: service)
+  }
+
+  static let instructions = """
+    Manage Apple Reminders: lists, reminders, due dates, priorities and recurrence. List and reminder names are \
+    fuzzy matched. Errors come back as {"error": {"code", "message", "suggestion"}}; PERMISSION_DENIED means the \
+    user must run `reminders authorize` in a terminal. Section tools are not implemented yet.
+    """
+
+  /// A configured server, not yet started.
+  public func makeServer() async -> Server {
+    let server = Server(
+      name: ProductInfo.name, version: ProductInfo.version, title: "Apple Reminders",
+      instructions: Self.instructions, capabilities: .init(tools: .init(listChanged: false)))
+    let toolbox = toolbox
+    await server.withMethodHandler(ListTools.self) { _ in ListTools.Result(tools: RemindersToolbox.tools) }
+    await server.withMethodHandler(CallTool.self) { parameters in
+      try await toolbox.call(parameters.name, arguments: parameters.arguments)
+    }
+    return server
+  }
+
+  /// Serves on `transport` until the client disconnects (for stdio: until stdin closes).
+  public func run(on transport: any Transport) async throws {
+    let server = await makeServer()
+    try await server.start(transport: transport)
+    await server.waitUntilCompleted()
+    await server.stop()
+  }
+}

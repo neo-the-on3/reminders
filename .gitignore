@@ -38,7 +38,7 @@ mise.*.local.toml
 \#*\#
 .*.sw?
 
-# Node (only used to regenerate test fixtures from remi)
+# Node (only used to regenerate the date reference cases)
 node_modules/
 
 # Local artifacts

@@ -3,8 +3,8 @@ name: CI
 on:
   push:
     branches: [main]
+  # Every PR, including PRs stacked on another branch
   pull_request:
-    branches: [main]
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -20,7 +20,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # Installs the Swift toolchain pinned in mise.toml
+      # Installs the Swift toolchain and SwiftLint pinned in mise.toml
       - uses: jdx/mise-action@v5
 
       - uses: actions/cache@v6
@@ -29,6 +29,8 @@ jobs:
           key: spm-linux-${{ hashFiles('mise.toml', 'Package.swift', 'Package.resolved') }}
           restore-keys: spm-linux-
 
+      # zsh and fish let the completion tests syntax-check every generated script
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq zsh fish
       - run: swift --version && swiftlint version
       - name: Lint (swift-format + SwiftLint, strict)
         run: mise run lint
@@ -38,9 +40,21 @@ jobs:
         run: swift test
       - name: CLI smoke test
         run: |
-          swift run remi --version
-          swift run remi --help
-          swift run remi completions bash
+          swift run reminders --version
+          swift run reminders --help
+          swift run reminders completions zsh > reminders.zsh && zsh -n reminders.zsh
+          # Usage errors exit 64
+          set +e
+          swift run reminders completions powershell
+          test $? -eq 64 || exit 1
+          # Commands that aren't available yet fail with a structured error and exit 1
+          swift run reminders --json lists 2> err.json
+          status=$?
+          set -e
+          cat err.json
+          test "$status" -eq 1
+          grep -q '"success" : false' err.json
+          grep -q '"code" : "NOT_IMPLEMENTED"' err.json
 
   macos:
     name: macOS (release build, test)
@@ -66,23 +80,16 @@ jobs:
       - name: Lint (swift-format + SwiftLint, strict)
         run: mise run lint
       - name: Build (release)
-        run: swift build -c release --product remi
+        run: swift build -c release --product reminders
       - name: Test
         run: swift test
       - name: CLI smoke test
         run: |
-          .build/release/remi --version
-          .build/release/remi --help
-          # Apple-backed commands aren't ported yet: expect a structured JSON error and exit code 1
-          set +e
-          .build/release/remi --json lists 2> err.json
-          status=$?
-          set -e
-          cat err.json
-          test "$status" -eq 1
-          grep -q '"success": false' err.json
+          .build/release/reminders --version
+          .build/release/reminders --help
+          .build/release/reminders completions zsh > reminders.zsh && zsh -n reminders.zsh
       - uses: actions/upload-artifact@v7
         with:
-          name: remi-macos
-          path: .build/release/remi
+          name: reminders-macos
+          path: .build/release/reminders
           if-no-files-found: error

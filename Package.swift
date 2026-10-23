@@ -1,45 +1,33 @@
 // swift-tools-version: 6.2
-// Swift port of remi (https://github.com/mattheworiordan/remi) by Matthew O'Riordan, MIT License.
+// reminders: a native Swift CLI for Apple Reminders. See README.md for the package layout.
 
 import PackageDescription
 
 let package = Package(
   name: "reminders",
   platforms: [
-    // remi targets macOS only; Linux builds are for development and CI of the pure-logic core.
+    // Apple Reminders features need macOS 26. Linux builds the platform-independent core for development and CI.
     .macOS(.v26)
   ],
   products: [
-    .executable(name: "remi", targets: ["RemiCLI"]),
-    .library(name: "RemiCore", targets: ["RemiCore"]),
+    .executable(name: "reminders", targets: ["RemindersCLI"]),
     .library(name: "RemindersCore", targets: ["RemindersCore"]),
   ],
   dependencies: [
     .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.8.2")
   ],
   targets: [
-    // Pure, platform-independent logic: parsing, matching, formatting, sync bookkeeping.
-    .target(name: "RemiCore"),
-    // Apple-only integrations (EventKit, private ReminderKit, Reminders SQLite store).
-    // Everything inside is guarded by `#if canImport(EventKit)` so the package still builds on Linux.
-    .target(
-      name: "RemiApple",
-      dependencies: ["RemiCore"]
-    ),
+    // Domain model, parsing, matching, presentation and section-sync bookkeeping. Foundation only.
+    .target(name: "RemindersCore"),
     .executableTarget(
-      name: "RemiCLI",
+      name: "RemindersCLI",
       dependencies: [
-        "RemiCore",
-        "RemiApple",
+        "RemindersCore",
         .product(name: "ArgumentParser", package: "swift-argument-parser"),
       ]
     ),
-    // Domain model, parsing, matching, presentation and section-sync bookkeeping. Foundation only.
-    .target(name: "RemindersCore"),
     .testTarget(name: "RemindersCoreTests", dependencies: ["RemindersCore"]),
-    .testTarget(
-      name: "RemiCoreTests",
-      dependencies: ["RemiCore"]
-    ),
-  ]
+    .testTarget(name: "RemindersCLITests", dependencies: ["RemindersCLI", "RemindersCore"]),
+  ],
+  swiftLanguageModes: [.v6]
 )

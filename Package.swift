@@ -29,6 +29,17 @@ let package = Package(
         "RemindersCore",
         "RemindersApple",
         .product(name: "ArgumentParser", package: "swift-argument-parser"),
+      ],
+      linkerSettings: [
+        // Embed Support/Info.plist as the executable's __TEXT,__info_plist section. macOS only shows the Reminders
+        // permission prompt to a command-line tool that carries a usage description there.
+        .unsafeFlags(
+          [
+            "-Xlinker", "-sectcreate", "-Xlinker", "__TEXT", "-Xlinker", "__info_plist",
+            "-Xlinker", Context.packageDirectory + "/Support/Info.plist",
+          ],
+          .when(platforms: [.macOS])
+        )
       ]
     ),
     .testTarget(name: "RemindersCoreTests", dependencies: ["RemindersCore"]),

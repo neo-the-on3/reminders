@@ -57,7 +57,7 @@ jobs:
           grep -q '"code" : "UNSUPPORTED_PLATFORM"' err.json
       - name: MCP smoke test (stdio)
         run: |
-          scripts/mcp-session.sh "" reminders_sections '{"list":"Inbox"}' reminders_lists '{}' | tee mcp.jsonl
+          scripts/mcp-session.sh "" reminders_move '{"list":"Inbox","title":"Milk","toSection":"Later"}' reminders_lists '{}' | tee mcp.jsonl
           test "$(wc -l < mcp.jsonl)" -eq 4
           test "$(grep -o '"name":"reminders_[a-z_]*"' mcp.jsonl | wc -l)" -eq 16
           grep -q 'NOT_IMPLEMENTED' mcp.jsonl

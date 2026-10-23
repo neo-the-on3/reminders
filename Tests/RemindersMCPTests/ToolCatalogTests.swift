@@ -26,8 +26,8 @@ struct ToolCatalogTests {
       let properties = JSONSchema.propertyNames(of: tool.inputSchema)
       #expect(JSONSchema.requiredNames(of: tool.inputSchema).allSatisfy(properties.contains), "\(tool.name)")
       #expect(tool.description?.isEmpty == false)
-      let isSectionTool = ReminderTool(rawValue: tool.name)?.isSectionTool ?? false
-      #expect((tool.outputSchema == nil) == isSectionTool, "\(tool.name)")
+      let isUnimplemented = ReminderTool(rawValue: tool.name)?.isUnimplemented ?? false
+      #expect((tool.outputSchema == nil) == isUnimplemented, "\(tool.name)")
       if let output = tool.outputSchema { #expect(output.objectValue?["type"] == "object") }
     }
     await session.stop()

@@ -27,10 +27,10 @@ public enum ReminderTool: String, CaseIterable, Sendable {
       outputSchema: outputSchema)
   }
 
-  /// Section tools exist so clients see the whole tool set, but report NOT_IMPLEMENTED until sections land.
-  public var isSectionTool: Bool {
+  /// Tools that change sections exist so clients see the whole tool set, but report NOT_IMPLEMENTED for now.
+  public var isUnimplemented: Bool {
     switch self {
-    case .sections, .createSection, .deleteSection, .move: true
+    case .createSection, .deleteSection, .move: true
     default: false
     }
   }
@@ -61,7 +61,7 @@ public enum ReminderTool: String, CaseIterable, Sendable {
   var summary: String {
     switch self {
     case .lists: "List all reminder lists with their incomplete and overdue counts"
-    case .list: "Show the reminders in a list (supports fuzzy name matching)"
+    case .list: "Show the reminders in a list, or in one of its sections (supports fuzzy name matching)"
     case .createList: "Create a new reminder list (idempotent: an existing list with that exact name is reused)"
     case .deleteList: "Delete a reminder list and all of its reminders"
     case .add: "Add a reminder to a list with optional due date, priority, notes and recurrence"
@@ -69,7 +69,7 @@ public enum ReminderTool: String, CaseIterable, Sendable {
     case .delete: "Delete a reminder, found by title (fuzzy matched) or ID prefix"
     case .update:
       "Update a reminder's title, due date, priority or notes; find it by title (fuzzy matched) or ID prefix"
-    case .sections: "List sections in a reminder list (not implemented yet)"
+    case .sections: "List the sections in a reminder list, in Reminders' order"
     case .createSection: "Create a section in a list (not implemented yet)"
     case .deleteSection: "Delete a section from a list (not implemented yet)"
     case .move: "Move a reminder to a different section (not implemented yet)"
@@ -100,7 +100,10 @@ public enum ReminderTool: String, CaseIterable, Sendable {
       return JSONSchema.object()
     case .list:
       return JSONSchema.object(
-        ["list": Self.listArgument, "includeCompleted": JSONSchema.boolean("Include completed reminders")],
+        [
+          "list": Self.listArgument, "section": JSONSchema.string("Only reminders in this section (fuzzy match)"),
+          "includeCompleted": JSONSchema.boolean("Include completed reminders"),
+        ],
         required: ["list"])
     case .createList:
       return JSONSchema.object(["name": JSONSchema.string("Name for the new list")], required: ["name"])
@@ -145,7 +148,7 @@ public enum ReminderTool: String, CaseIterable, Sendable {
     }
   }
 
-  /// The shape of `structuredContent` on success. Section tools have none until they are implemented.
+  /// The shape of `structuredContent` on success. Unimplemented tools have none.
   var outputSchema: Value? {
     switch self {
     case .lists:
@@ -156,10 +159,19 @@ public enum ReminderTool: String, CaseIterable, Sendable {
         ["reminders": JSONSchema.array(of: Self.reminderSchema, "Matching reminders")], required: ["reminders"])
     case .createList, .deleteList, .add, .complete, .delete, .update:
       Self.confirmationSchema
-    case .sections, .createSection, .deleteSection, .move:
+    case .sections:
+      JSONSchema.record(
+        ["sections": JSONSchema.array(of: Self.sectionSchema, "Sections, in Reminders' order")], required: ["sections"])
+    case .createSection, .deleteSection, .move:
       nil
     }
   }
+
+  private static let sectionSchema = JSONSchema.record(
+    [
+      "id": JSONSchema.string("Section identifier"), "displayName": JSONSchema.string("Section name"),
+      "listName": JSONSchema.string("List name"), "sortOrder": JSONSchema.integer("Position in the list, from 0"),
+    ], required: ["id", "displayName", "listName", "sortOrder"])
 
   private static let listSchema = JSONSchema.record(
     [

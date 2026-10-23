@@ -125,7 +125,25 @@ struct ToolCallTests {
     await session.stop()
   }
 
-  @Test("section tools and the section argument report NOT_IMPLEMENTED")
+  @Test("sections are listed, and reminders_list filters by one")
+  func sectionReads() async throws {
+    let session = try await MCPSession.start(sections: makeSectionStore())
+    let sections = try await session.success("reminders_sections", ["list": "work"])
+    #expect(
+      sections["sections"]?.arrayValue?.compactMap { $0.objectValue?["displayName"]?.stringValue } == [
+        "Writing", "Planning",
+      ])
+    #expect(try await session.titles("reminders_list", ["list": "Work", "section": "writ"]) == ["Write report"])
+    #expect(try await session.titles("reminders_list", ["list": "Work", "section": "Planning"]).isEmpty)
+    #expect(try await session.titles("reminders_list", ["list": "Work", "section": ""]).count == 2)
+    let all = try await session.success("reminders_list", ["list": "Work"])
+    #expect(
+      all["reminders"]?.arrayValue?.compactMap { $0.objectValue?["section"]?.stringValue } == ["Writing"])
+    #expect(try await session.failure("reminders_list", ["list": "Work", "section": "Q4"]).code == .sectionNotFound)
+    await session.stop()
+  }
+
+  @Test("tools that change sections, and sections without a section store, report NOT_IMPLEMENTED")
   func sections() async throws {
     let session = try await MCPSession.start()
     let calls: [(String, [String: Value])] = [

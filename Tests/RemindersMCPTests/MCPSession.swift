@@ -26,6 +26,23 @@ func makeStore(access: ReminderAccess = .fullAccess) -> InMemoryReminderStore {
     ], access: access, now: { referenceInstant })
 }
 
+/// Work's sections: Writing holds "Write report"; Planning is empty.
+func makeSectionStore() -> InMemorySectionStore {
+  InMemorySectionStore(
+    sections: [
+      "W": [
+        Section(id: "S-WRITING", displayName: "Writing", listName: "Work", sortOrder: 0),
+        Section(id: "S-PLANNING", displayName: "Planning", listName: "Work", sortOrder: 1),
+      ]
+    ],
+    memberships: [
+      "W": StoredMemberships(
+        data:
+          #"{"minimumSupportedVersion":20230430,"memberships":[{"memberID":"W1","groupID":"S-WRITING","modifiedOn":1}]}"#
+      )
+    ])
+}
+
 /// An MCP client connected to a `reminders` server over the SDK's in-memory transport.
 struct MCPSession {
   let client: Client
@@ -33,11 +50,12 @@ struct MCPSession {
   let store: InMemoryReminderStore
 
   static func start(
-    store: InMemoryReminderStore = makeStore(), permissions: PermissionGuidance = PermissionGuidance(host: nil)
+    store: InMemoryReminderStore = makeStore(), sections: any SectionStore = NoSectionStore(),
+    permissions: PermissionGuidance = PermissionGuidance(host: nil)
   ) async throws -> MCPSession {
     let (clientTransport, serverTransport) = await InMemoryTransport.createConnectedPair()
     let server = try await RemindersMCPServer(
-      service: RemindersService(store: store, clock: utcClock, permissions: permissions)
+      service: RemindersService(store: store, sections: sections, clock: utcClock, permissions: permissions)
     )
     .start(on: serverTransport)
     let client = Client(name: "tests", version: "1.0")

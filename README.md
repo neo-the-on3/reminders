@@ -219,7 +219,7 @@ Each tool runs the same operation as the CLI command, with the same name matchin
 | Tool | Arguments | Result (`structuredContent`) |
 | --- | --- | --- |
 | `reminders_lists` | — | `{"lists": [list]}` |
-| `reminders_list` | `list`, `includeCompleted?` | `{"reminders": [reminder]}` |
+| `reminders_list` | `list`, `section?`, `includeCompleted?` | `{"reminders": [reminder]}` |
 | `reminders_today`, `reminders_overdue` | — | `{"reminders": [reminder]}` |
 | `reminders_upcoming` | `days?` (default 7; due today through today + N, no overdue) | `{"reminders": [reminder]}` |
 | `reminders_search` | `query` | `{"reminders": [reminder]}` |
@@ -229,11 +229,14 @@ Each tool runs the same operation as the CLI command, with the same name matchin
 | `reminders_delete` | `list`, `title` or `id` | `{"message"}` |
 | `reminders_create_list` | `name` | `{"message", "id"}` |
 | `reminders_delete_list` | `list` | `{"message"}` |
-| `reminders_sections`, `reminders_create_section`, `reminders_delete_section`, `reminders_move` | see schema | not implemented yet* |
+| `reminders_sections` | `list` | `{"sections": [section]}` |
+| `reminders_create_section`, `reminders_delete_section`, `reminders_move` | see schema | not implemented yet* |
 
-\* Section tools, and `section` on `reminders_add`, report `NOT_IMPLEMENTED` until sections land.
+\* Tools that change sections, and `section` on `reminders_add`, report `NOT_IMPLEMENTED` for now. Reading
+sections needs Full Disk Access for the app running the server; without it, `reminders_sections` and a `section`
+filter fail with `PERMISSION_DENIED`, and `reminders_list` still works, without section names.
 
-Every tool publishes a JSON Schema for its input (unknown arguments are rejected) and, except the section tools,
+Every tool publishes a JSON Schema for its input (unknown arguments are rejected) and, except those three,
 for its output, and carries annotations (`readOnlyHint` on queries, `destructiveHint` on deletions).
 Results come back both as `structuredContent` and as the same JSON in a text block. Failures are tool errors
 (`isError: true`) whose text is `{"error": {"code", "message", "suggestion"}}` with the CLI's error codes; an

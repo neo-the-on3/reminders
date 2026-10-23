@@ -9,8 +9,18 @@ public struct PermissionGuidance: Hashable, Sendable {
     self.host = host
   }
 
-  /// The app that holds the permission, such as "Terminal" or "Claude".
+  /// What holds the permission, such as "Terminal", or "reminders" when the tool holds it itself.
   public var holder: String { host?.name ?? "your terminal app" }
+
+  /// Whether the tool holds its own permissions, rather than the app that started it.
+  public var holderIsThisTool: Bool { host?.isThisTool ?? false }
+
+  /// What to do once a setting is changed: an app has to be restarted to pick it up; the tool just runs again
+  /// (an MCP client may keep the old server running until it is restarted).
+  public var afterChanging: String {
+    holderIsThisTool
+      ? "then try again (restart the MCP client if \(holder) runs as its server)" : "then restart \(holder)"
+  }
 
   private var settings: String { SettingsPane.reminders.location }
 
@@ -34,20 +44,24 @@ public struct PermissionGuidance: Hashable, Sendable {
     case .notDetermined:
       "Run: \(ProductInfo.name) authorize, and click Allow when macOS asks about \(holder)"
     case .denied:
-      "Enable \(holder) in \(settings), then restart \(holder). macOS won't ask again, so re-running "
+      "Enable \(holder) in \(settings), \(afterChanging). macOS won't ask again, so re-running "
         + "\(ProductInfo.name) authorize won't help"
     case .restricted:
       "Enable \(holder) in \(settings) if the switch is available; otherwise device management or Screen Time "
         + "blocks it and whoever manages this Mac has to allow it"
     case .writeOnly:
-      "Choose Full Access for \(holder) in \(settings), then restart \(holder)"
+      "Choose Full Access for \(holder) in \(settings), \(afterChanging)"
     }
   }
 
   /// What to do when access was requested but macOS showed no prompt and recorded no answer, which happens when
   /// the host app isn't allowed to ask (a background helper, an MCP client).
   public var unpromptedRemedy: String {
-    "Enable \(holder) in \(settings) if it is listed there. If it isn't, macOS won't let \(holder) ask; "
+    if holderIsThisTool {
+      return "Enable \(holder) in \(settings) if it is listed there. If it isn't, check that the binary embeds its "
+        + "Info.plist (\(ProductInfo.name) doctor; build with scripts/build-release.sh), then try again"
+    }
+    return "Enable \(holder) in \(settings) if it is listed there. If it isn't, macOS won't let \(holder) ask; "
       + "run \(ProductInfo.name) authorize from a terminal app instead"
   }
 

@@ -44,13 +44,18 @@ public struct Diagnostics: Sendable {
     let name = ProductInfo.name
     let permissions = permissions
     let holder = permissions.holder
+    let attribution =
+      permissions.holderIsThisTool
+      ? """
+      Here macOS grants these permissions to \(name) itself, not to the app that started it.
+      You only need to do this once.\n
+      """
+      : """
+      macOS grants these permissions to the app you run \(name) from (here: \(holder)),
+      not to \(name) itself. You only need to do this once per app.\n
+      """
     console.narrate(
-      style("\n\(name) authorize\n", .bold) + console.renderer.rule(20) + "\n\n"
-        + style(
-          """
-          macOS grants these permissions to the app you run \(name) from (here: \(holder)),
-          not to \(name) itself. You only need to do this once per app.\n
-          """, .dim))
+      style("\n\(name) authorize\n", .bold) + console.renderer.rule(20) + "\n\n" + style(attribution, .dim))
 
     func open(_ pane: SettingsPane, toEnable what: String) {
       console.narrate("     Opening System Settings — \(what).\n")
@@ -101,7 +106,7 @@ public struct Diagnostics: Sendable {
         style("   ✗ Database access not yet granted.\n", .yellow)
           + "     Section features (create-section, move, etc.) need Full Disk Access for \(holder).\n")
       open(.fullDiskAccess, toEnable: "add \(holder) to Full Disk Access")
-      console.narrate(style("     After enabling, restart \(holder) and run \(name) doctor.\n", .dim))
+      console.narrate(style("     After enabling, \(permissions.afterChanging): run \(name) doctor.\n", .dim))
     }
     return AuthorizationReport(remindersAccess: access, databaseAccess: database != nil, host: system.hostApplication)
   }
@@ -135,7 +140,8 @@ public struct Diagnostics: Sendable {
         "Permissions app", .warn, "Unknown",
         detail: "macOS attributes permissions to the app that started \(ProductInfo.name)")
     }
-    return HealthCheck("Permissions app", .ok, host.name, detail: host.bundlePath)
+    return HealthCheck(
+      "Permissions app", .ok, host.isThisTool ? "\(host.name) (this tool)" : host.name, detail: host.bundlePath)
   }
 
   private func databaseCheck() -> HealthCheck {

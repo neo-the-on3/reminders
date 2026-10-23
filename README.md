@@ -45,15 +45,19 @@ Each CI run on macOS uploads the signed release binary as the `reminders-macos` 
 
 ### Reminders permission
 
-macOS grants Reminders access to the app you run `reminders` from (Terminal, iTerm, Cursor, or an MCP client such
-as Claude), not to the tool, and asks once per app. `reminders authorize` triggers the prompt and opens System
-Settings for anything still missing; `reminders doctor` checks everything without prompting. Any other command
-asks the first time too. Both name the app macOS asks about. They find it by walking up the parent processes to
-the enclosing `.app` bundle.
+macOS grants Reminders access to the process responsible for `reminders`. From Terminal, iTerm or Cursor
+that's the app, so the prompt names it and the permission is shared by everything you run there. An app that
+doesn't take responsibility for what it starts, such as Claude Desktop for its MCP servers, leaves `reminders`
+responsible for itself: the prompt then names `reminders`, and it appears under that name in System Settings.
+`reminders authorize` triggers the prompt and opens System Settings for anything still missing;
+`reminders doctor` checks everything without prompting. Any other command asks the first time too. Both name
+what macOS asks about. They ask macOS for the responsible process; if that isn't available they infer it: an app
+that declares no Reminders usage description can't be asked, so `reminders` (which embeds one) is named instead
+of it.
 
 macOS only asks once. After access is denied, restricted or set to write-only, re-running `authorize` shows no
-prompt: enable the app under System Settings › Privacy & Security › Reminders (choose Full Access), then restart
-that app. `doctor`, `authorize` and every `PERMISSION_DENIED` error say which of these states applies.
+prompt: enable the app (or `reminders`) under System Settings › Privacy & Security › Reminders (choose Full
+Access), then restart that app, or just run `reminders` again. `doctor`, `authorize` and every `PERMISSION_DENIED` error say which of these states applies.
 
 macOS only prompts a command-line tool that carries a usage description, so the linker embeds
 [`Support/Info.plist`](Support/Info.plist) (bundle identifier `io.github.neo-the-on3.reminders` and
@@ -128,10 +132,11 @@ npx @modelcontextprotocol/inspector "$(scripts/build-release.sh)" --mcp
 scripts/mcp-session.sh .build/release/reminders reminders_lists '{}' reminders_today '{}'
 ```
 
-**Permission.** macOS assigns Reminders access to the app that launched the server (Claude, Cursor, your
-terminal…), not to `reminders`. If tools report `PERMISSION_DENIED`, the error names that app: allow it under
-System Settings › Privacy & Security › Reminders and restart it. A client that can't show the prompt gets an
-error saying macOS didn't show it.
+**Permission.** macOS assigns Reminders access to the server's responsible process. Claude Desktop leaves that
+to the server, so the prompt names `reminders` itself; clients that take responsibility (an app's built-in
+terminal, for example) get the prompt in their own name. If tools report `PERMISSION_DENIED`, the error names
+whichever it is: allow it under System Settings › Privacy & Security › Reminders, then restart the client. A
+client that can't show the prompt gets an error saying macOS didn't show it.
 
 ### Tools
 
@@ -249,9 +254,10 @@ tool. Intentional differences:
   EventKit saves and removals report `STORE_FAILURE`. Reminders commands on a platform without Apple Reminders
   report `UNSUPPORTED_PLATFORM`.
 - **Permissions.** `doctor` never shows the permission prompt. It reports each access state separately (not
-  requested yet, denied, restricted, write-only, granted) and names the app that holds the permission; only
-  "not requested yet" points to `authorize`. Write-only access is not enough. A `Permissions app` check shows
-  which app macOS asks about.
+  requested yet, denied, restricted, write-only, granted) and names what holds the permission (an app, or
+  `reminders` itself when it is its own responsible process, as under Claude Desktop); only "not requested yet"
+  points to `authorize`. Write-only access is not enough. A `Permissions app` check shows what macOS asks about
+  (`reminders (this tool)` in that case). The original always named the launching app.
 - **`doctor` and `authorize` exit 1 on failure, with or without `--json`.** `doctor` fails when any check fails;
   `authorize` fails unless Reminders access ends up fully granted (Full Disk Access is only needed for sections
   and doesn't count). With `--json` both still print their result on stdout, as

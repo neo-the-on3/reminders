@@ -222,6 +222,7 @@ struct DiagnosticsTests {
             "databaseAccess" : true,
             "host" : {
               "bundlePath" : "/System/Applications/Utilities/Terminal.app",
+              "isThisTool" : false,
               "name" : "Terminal"
             },
             "remindersAccess" : "denied"

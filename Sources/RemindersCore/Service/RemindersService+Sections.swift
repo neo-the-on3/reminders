@@ -47,7 +47,9 @@ extension RemindersService {
     let list = try await lists().resolve(listName)
     let section = try await sectionStore.sections(in: list).resolve(name)
     try await sectionStore.deleteSection(section, in: list)
-    try await editMemberships(of: list) { $0.removeAll(inSection: section.id) }
+    // The section is gone either way: memberships of a deleted section are ignored when reading, so tidying them
+    // is best effort.
+    _ = try? await editMemberships(of: list) { $0.removeAll(inSection: section.id) }
     return Confirmation("Deleted section \"\(section.displayName)\" from \"\(list.title)\"")
   }
 

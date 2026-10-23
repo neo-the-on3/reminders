@@ -79,8 +79,17 @@ jobs:
           swiftlint version
       - name: Lint (swift-format + SwiftLint, strict)
         run: mise run lint
-      - name: Build (release)
-        run: swift build -c release --product reminders
+      - name: Build (release, embedded Info.plist, ad-hoc signed)
+        run: scripts/build-release.sh
+      - name: Verify Info.plist and signature
+        run: |
+          binary=.build/release/reminders
+          launchctl plist __TEXT,__info_plist "$binary" | tee plist.txt
+          grep -q NSRemindersFullAccessUsageDescription plist.txt
+          grep -q io.github.neo-the-on3.reminders plist.txt
+          codesign -dv --verbose=2 "$binary" 2>&1 | tee codesign.txt
+          grep -q "Identifier=io.github.neo-the-on3.reminders" codesign.txt
+          grep -q "Signature=adhoc" codesign.txt
       - name: Test
         run: swift test
       - name: CLI smoke test
@@ -88,6 +97,19 @@ jobs:
           .build/release/reminders --version
           .build/release/reminders --help
           .build/release/reminders completions zsh > reminders.zsh && zsh -n reminders.zsh
+          # Argument checks run before Reminders is touched
+          set +e
+          .build/release/reminders delete Inbox Milk 2> err.txt
+          status=$?
+          set -e
+          cat err.txt
+          test "$status" -eq 1
+          grep -q "Deletion requires --confirm flag" err.txt
+      - name: Doctor (informational; the runner has no Reminders permission)
+        continue-on-error: true
+        run: |
+          # doctor never prompts, but cap it in case EventKit blocks on a headless runner
+          perl -e 'alarm 60; exec @ARGV' .build/release/reminders doctor || true
       - uses: actions/upload-artifact@v7
         with:
           name: reminders-macos

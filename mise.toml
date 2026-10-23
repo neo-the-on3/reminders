@@ -10,8 +10,8 @@ description = "Debug build"
 run = "swift build"
 
 [tasks.release]
-description = "Release build of the reminders binary"
-run = "swift build -c release --product reminders"
+description = "Release build of the reminders binary (ad-hoc signed, with its Info.plist, on macOS)"
+run = "scripts/build-release.sh"
 
 [tasks.test]
 description = "Run unit tests"

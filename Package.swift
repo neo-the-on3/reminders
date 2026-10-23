@@ -14,6 +14,10 @@ let package = Package(
   ],
   targets: [
     // Pure, platform-independent logic: parsing, matching, formatting, sync bookkeeping.
-    .target(name: "RemiCore")
+    .target(name: "RemiCore"),
+    .testTarget(
+      name: "RemiCoreTests",
+      dependencies: ["RemiCore"]
+    ),
   ]
 )

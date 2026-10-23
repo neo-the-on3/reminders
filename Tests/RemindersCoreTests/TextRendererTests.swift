@@ -111,6 +111,17 @@ struct TextRendererTests {
     #expect(output.text == "✓ Done!\n")
   }
 
+  @Test("the Overdue heading counts reminders without repeating that they are overdue")
+  func overdueHeading() {
+    let overdue = sampleReminders.filter(utcClock.isOverdue)
+    let (console, output, _) = makeConsole()
+    console.show(ReminderListing(overdue, heading: "Overdue", layout: .overdue))
+    #expect(output.text.hasPrefix("\nOverdue (1 reminder)\n"))
+    let (other, today, _) = makeConsole()
+    other.show(ReminderListing(sampleReminders, heading: "Due Today", layout: .today))
+    #expect(today.text.hasPrefix("\nDue Today (8 reminders, 1 overdue)\n"))
+  }
+
   @Test("relative due dates")
   func relativeDates() {
     let renderer = TextRenderer(clock: utcClock)

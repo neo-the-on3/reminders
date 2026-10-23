@@ -3,8 +3,8 @@ name: CI
 on:
   push:
     branches: [main]
+  # Every PR, including PRs stacked on another feature branch
   pull_request:
-    branches: [main]
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -41,6 +41,14 @@ jobs:
           swift run remi --version
           swift run remi --help
           swift run remi completions bash
+          # No EventKit on Linux: Reminders commands fail with a structured error
+          set +e
+          swift run remi --json lists 2> err.json
+          status=$?
+          set -e
+          cat err.json
+          test "$status" -eq 1
+          grep -q '"success": false' err.json
 
   macos:
     name: macOS (release build, test)
@@ -65,22 +73,35 @@ jobs:
           swiftlint version
       - name: Lint (swift-format + SwiftLint, strict)
         run: mise run lint
-      - name: Build (release)
-        run: swift build -c release --product remi
+      - name: Build (release, embedded Info.plist, ad-hoc signed)
+        run: scripts/build-release.sh
+      - name: Verify Info.plist and signature
+        run: |
+          launchctl plist __TEXT,__info_plist .build/release/remi
+          launchctl plist __TEXT,__info_plist .build/release/remi | grep -q NSRemindersFullAccessUsageDescription
+          launchctl plist __TEXT,__info_plist .build/release/remi | grep -q io.github.neo-the-on3.remi
+          codesign -dv --verbose=2 .build/release/remi 2>&1 | tee codesign.txt
+          grep -q "Identifier=io.github.neo-the-on3.remi" codesign.txt
+          grep -q "Signature=adhoc" codesign.txt
       - name: Test
         run: swift test
       - name: CLI smoke test
         run: |
           .build/release/remi --version
           .build/release/remi --help
-          # Apple-backed commands aren't ported yet: expect a structured JSON error and exit code 1
+          # Argument checks run before Reminders is touched
           set +e
-          .build/release/remi --json lists 2> err.json
+          .build/release/remi delete Inbox Milk 2> err.txt
           status=$?
           set -e
-          cat err.json
+          cat err.txt
           test "$status" -eq 1
-          grep -q '"success": false' err.json
+          grep -q "Deletion requires --confirm flag" err.txt
+      - name: Doctor (informational; the runner has no Reminders permission, so access checks fail)
+        continue-on-error: true
+        run: |
+          # doctor never prompts, but cap it in case EventKit blocks on a headless runner
+          perl -e 'alarm 60; exec @ARGV' .build/release/remi doctor || true
       - uses: actions/upload-artifact@v7
         with:
           name: remi-macos

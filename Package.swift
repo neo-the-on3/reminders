@@ -14,7 +14,9 @@ let package = Package(
     .library(name: "RemindersCore", targets: ["RemindersCore"]),
   ],
   dependencies: [
-    .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.8.2")
+    .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.8.2"),
+    .package(url: "https://github.com/modelcontextprotocol/swift-sdk.git", exact: "0.12.1"),
+    .package(url: "https://github.com/apple/swift-log.git", from: "1.16.2"),
   ],
   targets: [
     // Domain model, the store protocol, commands as a service, parsing, matching, presentation and section-sync
@@ -23,6 +25,15 @@ let package = Package(
     // The platform: EventKit and the Mac's system facts. Compiles everywhere; off macOS the store reports
     // UNSUPPORTED_PLATFORM.
     .target(name: "RemindersApple", dependencies: ["RemindersCore"]),
+    // `reminders --mcp`: the commands as MCP tools, on the official MCP Swift SDK.
+    .target(
+      name: "RemindersMCP",
+      dependencies: [
+        "RemindersCore",
+        .product(name: "MCP", package: "swift-sdk"),
+        .product(name: "Logging", package: "swift-log"),
+      ]
+    ),
     .executableTarget(
       name: "RemindersCLI",
       dependencies: [
@@ -43,6 +54,10 @@ let package = Package(
       ]
     ),
     .testTarget(name: "RemindersCoreTests", dependencies: ["RemindersCore"]),
+    .testTarget(
+      name: "RemindersMCPTests",
+      dependencies: ["RemindersMCP", "RemindersCore", .product(name: "MCP", package: "swift-sdk")]
+    ),
     .testTarget(name: "RemindersCLITests", dependencies: ["RemindersCLI", "RemindersCore"]),
     // Opt-in (REMINDERS_INTEGRATION=1): drives the built binary against Apple Reminders in a throwaway list.
     .testTarget(name: "RemindersIntegrationTests", dependencies: ["RemindersCLI"]),

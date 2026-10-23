@@ -1,0 +1,33 @@
+# Normalise line endings: always LF in the repo and in checkouts.
+* text=auto eol=lf
+
+# Language-aware diffs (hunk headers show the enclosing func/type)
+*.swift diff=swift
+*.md    diff=markdown
+
+# Text formats
+*.yml   text
+*.yaml  text
+*.toml  text
+*.json  text
+*.mjs   text
+*.mts   text
+*.sh    text eol=lf
+# SVG is XML text: keep it diffable, but always LF
+*.svg   text eol=lf
+
+# Binary files: never normalise or text-diff
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.icns  binary
+*.pdf   binary
+*.zip   binary
+*.sqlite binary
+
+# GitHub linguist: generated test fixtures don't count toward language stats and are collapsed in diffs
+Tests/RemiCoreTests/ChronoFixtures.swift linguist-generated=true
+Tests/RemiCoreTests/OutputFixtures.swift linguist-generated=true
+Package.resolved linguist-generated=true

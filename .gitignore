@@ -1,8 +1,46 @@
+# macOS
 .DS_Store
-/.build
-/.swiftpm
-/Packages
+.AppleDouble
+.LSOverride
+._*
+
+# Swift Package Manager
+/.build/
+/.swiftpm/
+/Packages/
+.netrc
+
+# Xcode
 xcuserdata/
 DerivedData/
-*.xcodeproj
-Package.resolved.orig
+*.xcodeproj/
+*.xcworkspace/xcuserdata/
+*.xcscmblueprint
+*.xccheckout
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# mise local overrides (per-machine, never shared)
+mise.local.toml
+.mise.local.toml
+mise.*.local.toml
+.mise.*.local.toml
+
+# Editors and IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+\#*\#
+.*.sw?
+
+# Node (only used to regenerate test fixtures from remi)
+node_modules/
+
+# Local artifacts
+*.log
+/err.json

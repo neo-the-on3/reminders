@@ -7,7 +7,9 @@ struct GlobalOptions: ParsableArguments {
   @Flag(help: "Output in JSON format for machine consumption")
   var json = false
 
-  @Flag(name: [.customShort("v"), .long], help: "Show additional details (notes preview, full dates)")
+  @Flag(
+    name: [.customShort("v"), .long],
+    help: "Preview each reminder's notes when listing reminders as text (other output is unchanged)")
   var verbose = false
 }
 

@@ -131,6 +131,13 @@ struct SetupCommandTests {
     #expect(remove.contains("  claude mcp remove --scope user reminders\n"))
   }
 
+  @Test("--verbose says what it changes")
+  func verboseHelp() {
+    let help = RemindersCommand.helpMessage(for: SetupCursor.self)
+    #expect(help.contains("Preview each reminder's notes when listing reminders"))
+    #expect(!help.contains("full dates"))
+  }
+
   @Test("reports name the config file and its backup by one physical path")
   func physicalPaths() async throws {
     let home = try FakeHome()

@@ -17,8 +17,12 @@ let package = Package(
     .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.8.2")
   ],
   targets: [
-    // Domain model, parsing, matching, presentation and section-sync bookkeeping. Foundation only.
+    // Domain model, the store protocol, commands as a service, parsing, matching, presentation and section-sync
+    // bookkeeping. Foundation only.
     .target(name: "RemindersCore"),
+    // The platform: EventKit and the Mac's system facts. Compiles everywhere; off macOS the store reports
+    // UNSUPPORTED_PLATFORM.
+    .target(name: "RemindersApple", dependencies: ["RemindersCore"]),
     .executableTarget(
       name: "RemindersCLI",
       dependencies: [

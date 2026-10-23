@@ -41,6 +41,11 @@ extension RemindersError {
       .notImplemented, "\(feature) is not implemented yet", suggestion: "Track progress at \(ProductInfo.homepage)")
   }
 
+  /// Apple Reminders doesn't exist on this platform.
+  public static let unsupportedPlatform = RemindersError(
+    .unsupportedPlatform, "Apple Reminders is only available on macOS",
+    suggestion: "Run \(ProductInfo.name) on a Mac with macOS 26 or later")
+
   /// Any error as a ``RemindersError``; errors of other types become ``Code/unknown``.
   public init(wrapping error: any Error) {
     if let error = error as? RemindersError {

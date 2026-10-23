@@ -191,8 +191,9 @@ Five targets with one-way dependencies (`RemindersCLI` → `RemindersMCP`, `Remi
 - **`RemindersMCP`**: the MCP server on the official [MCP Swift SDK](https://github.com/modelcontextprotocol/swift-sdk)
   (pinned to 0.12.1). `ReminderTool` is an enum of the tools with their schemas and annotations;
   `RemindersToolbox` validates arguments against those schemas (`ToolArguments`) and calls `RemindersService`,
-  so the tools share every rule with the CLI. `DrainingTransport` keeps a stdio session open until every request
-  has been answered.
+  so the tools share every rule with the CLI. `SerialTransport` hands the server one request at a time, in arrival
+  order, so pipelined calls see each other's effects. It also keeps a stdio session open until every request has
+  been answered.
 - **`RemindersCLI`**: the `reminders` executable, built on swift-argument-parser's `AsyncParsableCommand`. Each
   command conforms to `ConsoleCommand` and runs in a `CommandContext` (console, service, system probe), which
   renders results and errors consistently and maps failures to exit status 1 (usage errors exit 64). Tests run
@@ -268,6 +269,8 @@ tool. Intentional differences:
   than bare text. `reminders_complete` and `reminders_delete` also accept `id`, like the CLI's `--id`. Unknown
   arguments are rejected. As before, MCP deletions need no `confirm` argument: clients ask the user to approve
   destructive tools.
+- **MCP calls run one at a time, in arrival order**, so a client that pipelines `create_list` and then `add`
+  gets the list it just made.
 - **Search** uses Foundation's `localizedStandardContains`, so it ignores diacritics as well as case (`cafe`
   finds `Café`).
 - **Reminder lookups** use full EventKit identifiers internally, so changing a reminder never acts on a

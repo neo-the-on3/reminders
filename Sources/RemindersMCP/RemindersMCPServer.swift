@@ -29,10 +29,16 @@ public struct RemindersMCPServer: Sendable {
     return server
   }
 
+  /// A server answering on `transport`, one request at a time in arrival order (see ``SerialTransport``).
+  public func start(on transport: any Transport) async throws -> Server {
+    let server = await makeServer()
+    try await server.start(transport: SerialTransport(transport))
+    return server
+  }
+
   /// Serves on `transport` until the client disconnects (for stdio: until stdin closes).
   public func run(on transport: any Transport) async throws {
-    let server = await makeServer()
-    try await server.start(transport: transport)
+    let server = try await start(on: transport)
     await server.waitUntilCompleted()
     await server.stop()
   }

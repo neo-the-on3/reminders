@@ -64,11 +64,11 @@ struct ToolCatalogTests {
     let request = Data(#"{"jsonrpc":"2.0","id":7,"method":"tools/list"}"#.utf8)
     let notification = Data(#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#.utf8)
     let batch = Data(#"[{"jsonrpc":"2.0","id":"a","method":"ping"},{"jsonrpc":"2.0","id":8,"result":{}}]"#.utf8)
-    #expect(DrainingTransport.ids(in: request, ofRequests: true).count == 1)
-    #expect(DrainingTransport.ids(in: request, ofRequests: false).isEmpty)
-    #expect(DrainingTransport.ids(in: notification, ofRequests: true).isEmpty)
-    #expect(DrainingTransport.ids(in: batch, ofRequests: true).count == 1)
-    #expect(DrainingTransport.ids(in: batch, ofRequests: false).count == 1)
-    #expect(DrainingTransport.ids(in: Data("not json".utf8), ofRequests: true).isEmpty)
+    #expect(SerialTransport.ids(in: request, ofRequests: true).count == 1)
+    #expect(SerialTransport.ids(in: request, ofRequests: false).isEmpty)
+    #expect(SerialTransport.ids(in: notification, ofRequests: true).isEmpty)
+    #expect(SerialTransport.ids(in: batch, ofRequests: true).count == 1)
+    #expect(SerialTransport.ids(in: batch, ofRequests: false).count == 1)
+    #expect(SerialTransport.ids(in: Data("not json".utf8), ofRequests: true).isEmpty)
   }
 }

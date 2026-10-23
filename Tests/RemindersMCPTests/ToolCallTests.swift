@@ -13,8 +13,11 @@ struct ToolCallTests {
     let lists = try await session.success("reminders_lists")
     #expect(lists["lists"]?.arrayValue?.compactMap { $0.objectValue?["title"]?.stringValue } == ["Groceries", "Work"])
     #expect(lists["lists"]?.arrayValue?.first?.objectValue?["reminderCount"] == 2)
+    // Only "Buy bread" (due 2026-10-20) is overdue; "Buy milk" is due today.
+    #expect(lists["lists"]?.arrayValue?.first?.objectValue?["overdueCount"] == 1)
 
-    #expect(try await session.titles("reminders_list", ["list": "groc"]) == ["Buy milk", "Buy bread"])
+    // Earliest due first, as in the CLI's text and JSON.
+    #expect(try await session.titles("reminders_list", ["list": "groc"]) == ["Buy bread", "Buy milk"])
     #expect(
       try await session.titles("reminders_list", ["list": "Groceries", "includeCompleted": true]).contains("Buy eggs"))
     #expect(try await session.titles("reminders_today") == ["Buy milk"])

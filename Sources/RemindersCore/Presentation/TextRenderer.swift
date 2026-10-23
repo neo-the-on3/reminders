@@ -50,27 +50,26 @@ public struct TextRenderer: Sendable {
     guard !reminders.isEmpty else {
       return "No reminders found\(heading.map { " in \"\($0)\"" } ?? "").\n"
     }
-    let sorted = layout.sortByDueDate ? reminders.sortedByDueDate() : reminders
     var text = ""
     if let heading {
-      let overdue = sorted.count(where: clock.isOverdue)
-      var summary = ["\(sorted.count) reminder\(sorted.count == 1 ? "" : "s")"]
+      let overdue = reminders.count(where: clock.isOverdue)
+      var summary = ["\(reminders.count) reminder\(reminders.count == 1 ? "" : "s")"]
       if overdue > 0 { summary.append(style("\(overdue) overdue", .red)) }
       text += style("\n\(heading)", .bold) + style(" (\(summary.joined(separator: ", ")))\n", .dim)
       text += rule(heading.terminalWidth + 2) + "\n"
     }
 
-    let sectionNames = layout.groupBySection ? sorted.compactMap(\.sectionName).uniqued() : []
+    let sectionNames = layout.groupBySection ? reminders.compactMap(\.sectionName).uniqued() : []
     if sectionNames.isEmpty {
-      for reminder in sorted { text += line(for: reminder, layout: layout, showSection: true) }
+      for reminder in reminders { text += line(for: reminder, layout: layout, showSection: true) }
     } else {
       for section in sectionNames {
         text += "\n \(style(section, .bold, .underline))\n"
-        for reminder in sorted where reminder.sectionName == section {
+        for reminder in reminders where reminder.sectionName == section {
           text += line(for: reminder, layout: layout, showSection: false)
         }
       }
-      let unsectioned = sorted.filter { $0.sectionName == nil }
+      let unsectioned = reminders.filter { $0.sectionName == nil }
       if !unsectioned.isEmpty {
         text += "\n \(style("Others", .dim, .underline))\n"
         for reminder in unsectioned { text += line(for: reminder, layout: layout, showSection: true) }
@@ -159,6 +158,7 @@ public struct ReminderLayout: Sendable, Hashable {
   public var context: Context
   /// Cross-list views tag each reminder with its list.
   public var showsList: Bool
+  /// Order by due date, earliest first and undated last. ``ReminderListing`` applies it, so text and JSON agree.
   public var sortByDueDate: Bool
   /// Group under section headings (when any reminder has a section).
   public var groupBySection: Bool
@@ -186,7 +186,7 @@ extension Reminder {
 
 extension [Reminder] {
   /// Earliest due date first, undated last; ties keep their order.
-  fileprivate func sortedByDueDate() -> [Reminder] {
+  func sortedByDueDate() -> [Reminder] {
     enumerated().sorted { lhs, rhs in
       switch (lhs.element.dueDate, rhs.element.dueDate) {
       case (let left?, let right?) where left != right: left < right

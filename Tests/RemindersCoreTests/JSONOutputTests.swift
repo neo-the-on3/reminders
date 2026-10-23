@@ -73,10 +73,29 @@ struct JSONOutputTests {
     #expect(output.text == "{\n  \"data\" : {\n    \"message\" : \"a/b\"\n  },\n  \"success\" : true\n}\n")
   }
 
+  @Test("JSON lists reminders in the same due-date order as the text")
+  func order() throws {
+    let listing = ReminderListing(sampleReminders, heading: "Groceries", layout: .today)
+    let (json, output, _) = makeConsole(json: true)
+    json.show(listing)
+    let ids = try JSONSerialization.jsonObject(with: Data(output.text.utf8)) as? [String: Any]
+    let order = (ids?["data"] as? [[String: Any]])?.compactMap { $0["id"] as? String }
+    #expect(order == ["A2", "A3", "A1", "A4", "A8", "A5", "A6", "A7"])
+
+    let (text, rendered, _) = makeConsole()
+    text.show(listing)
+    let titles = rendered.text.split(separator: "\n").filter { $0.hasPrefix(" ○") || $0.hasPrefix(" ✓") }
+    let byID = Dictionary(uniqueKeysWithValues: sampleReminders.map { ($0.id, $0.title) })
+    #expect(titles.count == order?.count)
+    for (line, id) in zip(titles, order ?? []) {
+      #expect(line.contains(byID[id] ?? "?"), "\(line) vs \(id)")
+    }
+  }
+
   @Test("reminders keep their documented fields; absent ones are omitted")
   func reminders() throws {
     let (console, output, _) = makeConsole(json: true)
-    console.show(ReminderListing(sampleReminders, heading: "x", layout: .list))
+    console.show(ReminderListing(sampleReminders, heading: "x", layout: ReminderLayout(.list, sortByDueDate: false)))
     let data = try #require(try JSONTree(output.text)["data"])
     #expect(
       data[0]

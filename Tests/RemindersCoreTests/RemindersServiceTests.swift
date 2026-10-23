@@ -56,9 +56,10 @@ struct ServiceQueryTests {
     let service = makeService(makeStore())
     let open = try await service.contents(ofList: "groc")
     #expect(open.heading == "Groceries")
-    #expect(open.reminders.map(\.id) == ["G1", "G2"])
+    // Earliest due first, as in the text output.
+    #expect(open.reminders.map(\.id) == ["G2", "G1"])
     let all = try await service.contents(ofList: "Groceries", includeCompleted: true)
-    #expect(all.reminders.map(\.id) == ["G1", "G2", "G3"])
+    #expect(all.reminders.map(\.id) == ["G2", "G1", "G3"])
   }
 
   @Test("today, overdue and upcoming select by due day")
@@ -75,7 +76,7 @@ struct ServiceQueryTests {
   @Test("search matches titles and notes, ignoring case, incomplete only")
   func search() async throws {
     let service = makeService(makeStore())
-    #expect(try await service.search("BUY").reminders.map(\.id) == ["G1", "G2"])
+    #expect(try await service.search("BUY").reminders.map(\.id) == ["G2", "G1"])
     #expect(try await service.search("numbers").reminders.map(\.id) == ["W1"])
     #expect(try await service.search("eggs").reminders.isEmpty)
     #expect(try await service.search("x").heading == "Search: \"x\"")

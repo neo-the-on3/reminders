@@ -142,7 +142,8 @@ public struct ListOverview: ConsoleRepresentable {
   public func text(using renderer: TextRenderer) -> String { renderer.lists(lists) }
 }
 
-/// Reminders in a list, or across lists (`today`, `overdue`, `upcoming`, `search`).
+/// Reminders in a list, or across lists (`today`, `overdue`, `upcoming`, `search`), in the order the layout asks
+/// for. Text and JSON show that same order.
 public struct ReminderListing: ConsoleRepresentable {
   public var reminders: [Reminder]
   /// Title above the reminders, such as the list name or "Due Today".
@@ -150,7 +151,7 @@ public struct ReminderListing: ConsoleRepresentable {
   public var layout: ReminderLayout
 
   public init(_ reminders: [Reminder], heading: String?, layout: ReminderLayout) {
-    self.reminders = reminders
+    self.reminders = layout.sortByDueDate ? reminders.sortedByDueDate() : reminders
     self.heading = heading
     self.layout = layout
   }

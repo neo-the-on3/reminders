@@ -1,0 +1,26 @@
+# Tool versions for this repo. swift-format (Apple's formatter) ships with the Swift toolchain, so the
+# `swift` pin also pins `swift format`. Used locally (Linux & macOS) and in GitHub Actions
+# via jdx/mise-action, so every environment builds with the same toolchain.
+[tools]
+swift = "6.4.1"
+swiftlint = "0.65.1"
+
+[tasks.build]
+description = "Debug build"
+run = "swift build"
+
+[tasks.release]
+description = "Release build of the remi binary"
+run = "swift build -c release --product remi"
+
+[tasks.test]
+description = "Run unit tests"
+run = "swift test"
+
+[tasks.lint]
+description = "Check formatting (swift-format) and lint (SwiftLint); fails on any violation"
+run = ["swift format lint --strict --recursive --parallel .", "swiftlint lint --strict --quiet"]
+
+[tasks.format]
+description = "Format in place with swift-format"
+run = "swift format --in-place --recursive --parallel ."

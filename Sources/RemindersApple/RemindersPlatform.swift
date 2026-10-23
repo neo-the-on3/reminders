@@ -18,10 +18,12 @@ public enum RemindersPlatform {
     #endif
   }
 
-  /// Sections, read from the Reminders database. Off macOS there's no database, so it reports what's missing.
+  /// Sections: read from the Reminders database and changed through ReminderKit. Off macOS there's neither, so it
+  /// reports what's missing.
   public static func makeSectionStore(system: any SystemProbe, permissions: PermissionGuidance) -> any SectionStore {
     #if os(macOS)
-      DatabaseSectionStore(system: system, permissions: permissions)
+      AppleSectionStore(
+        database: DatabaseSectionStore(system: system, permissions: permissions), reminderKit: RuntimeReminderKit())
     #else
       NoSectionStore()
     #endif

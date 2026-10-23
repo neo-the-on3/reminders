@@ -168,7 +168,18 @@ struct SectionEditTests {
     let result = try await service.deleteSection(named: "Dairy", inList: "Groceries")
     #expect(result.message == "Deleted section \"Dairy\" from \"Groceries\"")
     #expect(await sectionStore.sections(in: Fixture.groceries).map(\.displayName) == ["Produce"])
-    #expect(try await storedEntries(sectionStore).map(\.reminderID) == [Fixture.applesID])
+    // Memberships are left for Reminders; Milk's entry for the gone section is ignored when reading.
+    #expect(await sectionStore.memberships(of: Fixture.groceries) == Fixture.stored)
+    let milk = try await service.contents(ofList: "Groceries").reminders.first { $0.title == "Milk" }
+    #expect(milk?.section == nil)
+  }
+
+  @Test("delete-section with an unknown list or section deletes nothing")
+  func deleteSectionPreconditions() async throws {
+    let (service, _, sectionStore) = makeService()
+    await #expect(throws: RemindersError.self) { try await service.deleteSection(named: "Frozen", inList: "Groceries") }
+    await #expect(throws: RemindersError.self) { try await service.deleteSection(named: "Dairy", inList: "Nope") }
+    #expect(await sectionStore.sections(in: Fixture.groceries).map(\.displayName) == ["Dairy", "Produce"])
   }
 
   @Test("creating a section reuses one with exactly that name")

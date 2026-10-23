@@ -277,7 +277,9 @@ Five targets with one-way dependencies (`RemindersCLI` → `RemindersMCP`, `Remi
   EventKit objects never leave it (fetches convert to `Reminder` values, changes look items up by identifier).
   `DatabaseSectionStore` reads sections from Reminders' SQLite databases (one per account) through a
   `SQLiteDatabase` connection that is opened read-only, via the `CSQLite` system library (`libsqlite3-dev` on
-  Linux). `MacSystemProbe` provides the machine facts. It compiles everywhere: off macOS,
+  Linux). `AppleSectionStore` adds creating and deleting sections through a `ReminderKitBridge`, implemented
+  by `RuntimeReminderKit`, which loads the private ReminderKit framework at run time (nothing links against it)
+  and checks each class and method before calling it. `MacSystemProbe` provides the machine facts. It compiles everywhere: off macOS,
   `UnsupportedPlatformStore` answers every call with `UNSUPPORTED_PLATFORM`.
 - **`RemindersMCP`**: the MCP server on the official [MCP Swift SDK](https://github.com/modelcontextprotocol/swift-sdk)
   (pinned to 0.12.1). `ReminderTool` is an enum of the tools with their schemas and annotations;

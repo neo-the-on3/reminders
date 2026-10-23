@@ -33,6 +33,12 @@ public struct Diagnostics: Sendable {
 
   /// Asks for Reminders access (the system prompt) if the user hasn't decided yet, checks database access, and
   /// opens System Settings for whatever is missing, narrating each step to `console`.
+  /// Why `authorize` failed: the `PERMISSION_DENIED` (or `UNSUPPORTED_PLATFORM`) error for anything short of full
+  /// Reminders access; nil once it is granted. Database access is only needed for sections, so it doesn't count.
+  public func failure(of report: AuthorizationReport) -> RemindersError? {
+    report.remindersAccess == .fullAccess ? nil : permissions.error(for: report.remindersAccess)
+  }
+
   public func authorize(narratingTo console: Console) async -> AuthorizationReport {
     let style = console.style
     let name = ProductInfo.name

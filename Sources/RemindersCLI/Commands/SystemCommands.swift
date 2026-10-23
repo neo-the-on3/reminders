@@ -17,9 +17,13 @@ struct Authorize: ConsoleCommand {
   static let configuration = CommandConfiguration(abstract: "Request Reminders access permission")
   @OptionGroup var globals: GlobalOptions
 
+  /// Exits 1 unless the process ends up with full Reminders access.
   func run(in context: CommandContext) async throws {
     let diagnostics = Diagnostics(service: context.service, system: context.system)
-    context.console.show(await diagnostics.authorize(narratingTo: context.console))
+    let report = await diagnostics.authorize(narratingTo: context.console)
+    let failure = diagnostics.failure(of: report)
+    context.console.show(report, failure: failure)
+    if failure != nil { throw ExitCode.failure }
   }
 }
 
@@ -29,12 +33,12 @@ struct Doctor: ConsoleCommand {
   @Flag(help: "Verify sync status") var sync = false
   @Flag(name: .customLong("db"), help: "Show database location and stats") var databaseStats = false
 
-  /// Exits 1 when a check fails. With `--json` the checks are the result and the exit status is 0.
+  /// Exits 1 when a check fails, in text and JSON mode alike.
   func run(in context: CommandContext) async throws {
     let diagnostics = Diagnostics(service: context.service, system: context.system)
     let report = await diagnostics.checkHealth(includeDatabaseStats: databaseStats, includeSync: sync)
-    context.console.show(report)
-    if !report.passed && !context.console.isJSON { throw ExitCode.failure }
+    context.console.show(report, failure: report.failure)
+    if !report.passed { throw ExitCode.failure }
   }
 }
 

@@ -158,11 +158,27 @@ public struct MCPSetup: Sendable {
     let home = environment.homeDirectory
     let project = environment.currentDirectory
     let path = ClaudeCodeRegistration.configPath(scope: scope, home: home, project: project)
-    let existing = ClaudeCodeRegistration.existingEntry(
-      scope: scope, home: home, project: project, read: { try ConfigFile.read($0) })
     let remove = ClaudeCodeRegistration.removeArguments(scope: scope)
     let add = ClaudeCodeRegistration.addArguments(entry, scope: scope)
+    let command = { (arguments: [String]) in [ClaudeCodeRegistration.executableName] + arguments }
 
+    // Without the CLI nothing can be run, and what Claude Code has registered can't be told reliably, so the
+    // commands are shown instead: the same with --dry-run as without.
+    guard
+      let claude = ClaudeCodeRegistration.findExecutable(
+        ClaudeCodeRegistration.executableName, searchPath: environment.searchPath,
+        isExecutable: environment.isExecutable)
+    else {
+      let plan = options.remove ? [remove] : options.force ? [remove, add] : [add]
+      var report = SetupReport(
+        client: .claudeCode, outcome: .manual, dryRun: options.dryRun, configPath: path, server: entry,
+        commands: plan.map(command), nextSteps: MCPClient.claudeCode.nextSteps(after: .manual))
+      report.removing = options.remove
+      return report
+    }
+
+    let existing = ClaudeCodeRegistration.existingEntry(
+      scope: scope, home: home, project: project, read: { try ConfigFile.read($0) })
     let outcome: SetupOutcome
     let plan: [[String]]
     switch (options.remove, existing) {
@@ -176,21 +192,11 @@ public struct MCPSetup: Sendable {
       throw Self.claudeCodeConflict(scope, current, fix: "remove it anyway")
     case (true, _): (outcome, plan) = (.removed, [remove])
     }
-    let commands = plan.map { [ClaudeCodeRegistration.executableName] + $0 }
-    var report = SetupReport(
+    let report = SetupReport(
       client: .claudeCode, outcome: outcome, dryRun: options.dryRun, configPath: path, server: entry,
-      commands: commands.isEmpty ? nil : commands,
+      commands: plan.isEmpty ? nil : plan.map(command),
       nextSteps: MCPClient.claudeCode.nextSteps(after: outcome, scope: scope))
-    guard !plan.isEmpty, !options.dryRun else { return report }
-    guard
-      let claude = ClaudeCodeRegistration.findExecutable(
-        ClaudeCodeRegistration.executableName, searchPath: environment.searchPath,
-        isExecutable: environment.isExecutable)
-    else {
-      report.outcome = .manual
-      report.nextSteps = MCPClient.claudeCode.nextSteps(after: .manual)
-      return report
-    }
+    guard !options.dryRun else { return report }
     for arguments in plan {
       let result = try await environment.runner.run(claude, arguments)
       guard result.status == 0 else {
@@ -240,9 +246,11 @@ public struct SetupReport: ConsoleRepresentable {
   /// With `--dry-run`, the file as it would be written.
   public var preview: String?
   public var nextSteps: [String]
+  /// Whether this was `--remove`; it tells apart the two kinds of `manual` outcome.
+  var removing = false
   /// About the Reminders permission prompt, once the server is registered.
   public var note: String? {
-    outcome == .added || outcome == .replaced || outcome == .unchanged || outcome == .manual
+    outcome == .added || outcome == .replaced || outcome == .unchanged || (outcome == .manual && !removing)
       ? client.permissionNote : nil
   }
 
@@ -291,7 +299,14 @@ public struct SetupReport: ConsoleRepresentable {
       return would ? "Would remove the reminders server from \(name)" : "Removed the reminders server from \(name)"
     case .unchanged: return "\(name) already has this reminders server; nothing changed"
     case .absent: return "\(name) has no reminders server; nothing to remove"
-    case .manual: return "`claude` isn't on PATH, so nothing was changed. Run this to set up Claude Code:"
+    case .manual where removing:
+      return "`claude` isn't on PATH, so whether Claude Code has a reminders server can't be checked, and nothing "
+        + (dryRun ? "would change. It would print the command to remove it:" : "was changed. Run this to remove it:")
+    case .manual:
+      return "`claude` isn't on PATH, so nothing "
+        + (dryRun
+          ? "would change. It would print the command to set up Claude Code:"
+          : "was changed. Run this to set up Claude Code:")
     }
   }
 

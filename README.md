@@ -155,8 +155,9 @@ reminders setup-cursor                    # Cursor, every project (--project <di
 - **Paths** are reported the way the file system resolves them, symlinks included, so the config, its backup and
   the server's command all print in one form (on macOS `/tmp/x.json` shows as `/private/tmp/x.json`).
 - **Claude Code** owns its config, so `setup-claude-code` runs
-  `claude mcp add --transport stdio --scope user reminders -- <binary> --mcp`. Without `claude` on `PATH` it prints
-  that command instead.
+  `claude mcp add --transport stdio --scope user reminders -- <binary> --mcp`. Without `claude` on `PATH` it can't
+  run or check anything, so it prints the command instead (`manual`), the same with `--dry-run`; with `--remove` it
+  prints `claude mcp remove --scope <scope> reminders`.
 - **Running it again** changes nothing when the same server is registered. A different `reminders` server is
   reported (`CONFIG_CONFLICT`) and replaced only with `--force`.
 - **`--dry-run`** shows the change (the new file, or the `claude` commands) without making it; **`--remove`**

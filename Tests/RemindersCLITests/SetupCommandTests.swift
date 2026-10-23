@@ -120,6 +120,17 @@ struct SetupCommandTests {
     #expect(throws: (any Error).self) { try RemindersCommand.parseAsRoot(["setup-claude-code", "--scope", "team"]) }
   }
 
+  @Test("setup-claude-code --dry-run and --remove without claude match the real run: commands shown, nothing run")
+  func claudeCodeWithoutCLI() async throws {
+    let home = try FakeHome()
+    defer { home.remove() }
+    let (_, dry, _) = try await run(["setup-claude-code", "--dry-run", "--json"], in: home)
+    #expect(dry.contains(#""outcome" : "manual""#))
+    let (_, remove, _) = try await run(["setup-claude-code", "--remove"], in: home)
+    #expect(remove.contains("can't be checked"))
+    #expect(remove.contains("  claude mcp remove --scope user reminders\n"))
+  }
+
   @Test("reports name the config file and its backup by one physical path")
   func physicalPaths() async throws {
     let home = try FakeHome()

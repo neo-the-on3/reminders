@@ -62,12 +62,47 @@ struct MCPSetupFileClientTests {
     #expect(again.outcome == .unchanged)
     #expect(again.backupPath == nil)
 
+    let wouldRemove = try machine.setup.configure(.claudeDesktop, at: path, SetupOptions(dryRun: true, remove: true))
+    #expect(wouldRemove.fileDeleted)
+    #expect(wouldRemove.preview == nil)
+    #expect(wouldRemove.text(using: TextRenderer()).contains("\(path) (would be deleted)\n"))
+    #expect(try ConfigFile.read(path) == written)
+
+    // The file held nothing but the reminders server, so it goes (after a backup) rather than staying as a shell.
     let removed = try machine.setup.configure(.claudeDesktop, at: path, SetupOptions(remove: true))
     #expect(removed.outcome == .removed)
+    #expect(removed.fileDeleted)
+    #expect(removed.headline.hasSuffix("and deleted its config, which held nothing else"))
+    #expect(removed.text(using: TextRenderer()).contains("\(path) (deleted)\n"))
     let backup = try #require(removed.backupPath)
     #expect(try ConfigFile.read(backup) == written)
-    #expect(try ConfigFile.read(path) == "{\n  \"mcpServers\": {}\n}\n")
-    #expect(try machine.setup.configure(.claudeDesktop, at: path, SetupOptions(remove: true)).outcome == .absent)
+    #expect(!FileManager.default.fileExists(atPath: path))
+    #expect(FileManager.default.fileExists(atPath: machine.home.file("Library/Application Support/Claude")))
+    let absent = try machine.setup.configure(.claudeDesktop, at: path, SetupOptions(remove: true))
+    #expect(absent.outcome == .absent)
+    #expect(!absent.fileDeleted)
+    #expect(absent.backupPath == nil)
+  }
+
+  @Test("removing keeps a file with anything else in it, empty mcpServers included; a symlinked one stays")
+  func removeKeeps() throws {
+    let machine = try Machine()
+    let other = machine.home.file("other.json")
+    try ConfigFile.write(
+      #"{"mcpServers": {"reminders": {"command": "\#(binary)", "args": ["--mcp"]}}, "theme": "dark"}"#, to: other)
+    let kept = try machine.setup.configure(.claudeDesktop, at: other, SetupOptions(remove: true))
+    #expect(!kept.fileDeleted)
+    #expect(try ConfigFile.read(other) == #"{"mcpServers": {}, "theme": "dark"}"#)
+
+    let target = machine.home.file("dotfiles/mcp.json")
+    try ConfigFile.write(#"{"mcpServers": {"reminders": {"command": "\#(binary)", "args": ["--mcp"]}}}"#, to: target)
+    let link = machine.home.file("link.json")
+    try FileManager.default.createSymbolicLink(atPath: link, withDestinationPath: target)
+    let linked = try machine.setup.configure(.claudeDesktop, at: link, SetupOptions(remove: true))
+    #expect(linked.outcome == .removed)
+    #expect(!linked.fileDeleted)
+    #expect(ConfigFile.isSymbolicLink(link))
+    #expect(try ConfigFile.read(link) == #"{"mcpServers": {}}"#)
   }
 
   @Test("Cursor: the global file by default, a project's with --project, with a stdio type")

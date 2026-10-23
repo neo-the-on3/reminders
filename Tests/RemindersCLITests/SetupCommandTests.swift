@@ -89,7 +89,9 @@ struct SetupCommandTests {
     let (status, output, _) = try await run(["setup-cursor", "--project", "app", "--remove", "--json"], in: home)
     #expect(status == 0)
     #expect(output.contains(#""outcome" : "removed""#))
+    #expect(output.contains(#""fileDeleted" : true"#))
     #expect(output.contains(#""backupPath""#))
+    #expect(home.read("app/.cursor/mcp.json") == nil)
     #expect(try await run(["setup-cursor", "--project", "missing"], in: home).2.contains("isn't a directory"))
     #expect(throws: (any Error).self) {
       try RemindersCommand.parseAsRoot(["setup-cursor", "--project", "app", "--config", "x.json"])

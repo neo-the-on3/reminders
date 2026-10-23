@@ -50,7 +50,10 @@ struct MCPSetupFileClientTests {
     #expect(added.outcome == .added)
     #expect(added.backupPath == nil)
     #expect(added.nextSteps.first?.contains("Quit Claude Desktop") == true)
-    #expect(added.note?.contains("names `reminders`") == true)
+    #expect(
+      added.note?.contains("prompt and the System Settings › Privacy & Security › Reminders entry name `reminders`")
+        == true)
+    #expect(added.note?.contains("restart Claude Desktop") == true)
     let written = try #require(try ConfigFile.read(path))
     #expect(written.contains(#""command": "\#(binary)""#))
     #expect(!written.contains("\"type\""))
@@ -229,5 +232,20 @@ struct MCPSetupClaudeCodeTests {
     #expect(SetupReport.shellQuoted("/Users/me/My Tools/reminders") == "'/Users/me/My Tools/reminders'")
     #expect(SetupReport.shellQuoted("it's") == #"'it'\''s'"#)
     #expect(SetupReport.shellQuoted("--mcp") == "--mcp")
+  }
+}
+
+@Suite("MCP setup: what each client is told")
+struct MCPSetupMessageTests {
+  @Test("the permission note names the app being set up")
+  func permissionNotes() {
+    #expect(MCPClient.claudeDesktop.permissionNote.contains("name `reminders`"))
+    #expect(MCPClient.cursor.permissionNote.contains("name Cursor"))
+    #expect(MCPClient.cursor.permissionNote.contains("restart Cursor"))
+    #expect(MCPClient.claudeCode.permissionNote.contains("the app Claude Code runs in"))
+    for client in [MCPClient.claudeDesktop, .cursor, .claudeCode] {
+      let others = [MCPClient.claudeDesktop, .cursor].filter { $0 != client }.map(\.displayName)
+      #expect(others.allSatisfy { !client.permissionNote.contains($0) })
+    }
   }
 }

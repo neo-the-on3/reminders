@@ -38,12 +38,25 @@ public enum MCPClient: String, Sendable, Encodable {
     }
   }
 
-  /// Who macOS asks about Reminders access once the client starts the server.
-  static let permissionNote =
-    "On first use macOS asks for Reminders access. Claude Desktop leaves that to the server, so the prompt names "
-    + "`reminders`; clients that take responsibility for their servers (an app's built-in terminal, for example) "
-    + "are asked in their own name. If tools report PERMISSION_DENIED, allow whichever the error names under "
-    + "System Settings › Privacy & Security › Reminders, then restart the client."
+  /// Who macOS asks about Reminders access once this client starts the server, and what to allow if it was denied.
+  var permissionNote: String {
+    let settings = "System Settings › Privacy & Security › Reminders"
+    switch self {
+    case .claudeDesktop:
+      return "On first use macOS asks whether `reminders` may access Reminders: Claude Desktop leaves its servers "
+        + "responsible for themselves, so the prompt and the \(settings) entry name `reminders`. If tools report "
+        + "PERMISSION_DENIED, turn `reminders` on there (Full Access), then restart Claude Desktop."
+    case .cursor:
+      return "On first use macOS asks whether Cursor may access Reminders: Cursor is responsible for the servers it "
+        + "starts, so the prompt and the \(settings) entry name Cursor, and the access is shared with everything "
+        + "Cursor runs. If tools report PERMISSION_DENIED, turn Cursor on there (Full Access), then restart Cursor."
+    case .claudeCode:
+      return "On first use macOS asks on behalf of the app Claude Code runs in (Terminal, iTerm, or an editor's "
+        + "terminal), which is responsible for it, so the prompt and the \(settings) entry name that app; "
+        + "`reminders authorize` run there asks ahead of time. If tools report PERMISSION_DENIED, turn that app on "
+        + "there (Full Access), then restart it."
+    }
+  }
 }
 
 /// `--dry-run`, `--force` and `--remove`, shared by the setup commands.
@@ -227,7 +240,7 @@ public struct SetupReport: ConsoleRepresentable {
   /// About the Reminders permission prompt, once the server is registered.
   public var note: String? {
     outcome == .added || outcome == .replaced || outcome == .unchanged || outcome == .manual
-      ? MCPClient.permissionNote : nil
+      ? client.permissionNote : nil
   }
 
   private enum CodingKeys: String, CodingKey {

@@ -27,6 +27,7 @@ private struct HealthySystem: SystemProbe {
 /// Runs a parsed command against an in-memory store and captures what it printed.
 private struct Harness {
   let store: InMemoryReminderStore
+  var sections: any SectionStore = NoSectionStore()
   let output = TextBuffer()
   let errors = TextBuffer()
 
@@ -46,7 +47,7 @@ private struct Harness {
       console: Console(
         format: json ? .json : .text, renderer: TextRenderer(clock: .init(now: .now, timeZone: .gmt)),
         output: output, errors: errors),
-      service: RemindersService(store: override ?? store, clock: DayClock(timeZone: .gmt)),
+      service: RemindersService(store: override ?? store, sections: sections, clock: DayClock(timeZone: .gmt)),
       system: system, setup: setup ?? .live())
     do {
       try await command.execute(in: context)
@@ -109,12 +110,51 @@ struct CommandExecutionTests {
     #expect(harness.errors.text.contains(#""code" : "LIST_NOT_FOUND""#))
   }
 
-  @Test("section options report NOT_IMPLEMENTED")
+  @Test("sections and list --section read the section store")
+  func sectionReads() async throws {
+    var harness = Harness(
+      store: InMemoryReminderStore(
+        lists: [ReminderList(id: "L1", title: "Inbox")],
+        reminders: [
+          Reminder(id: "R1", title: "Milk", listID: "L1", listName: "Inbox"),
+          Reminder(id: "R2", title: "Bread", listID: "L1", listName: "Inbox"),
+        ]))
+    harness.sections = InMemorySectionStore(
+      sections: ["L1": [Section(id: "S1", displayName: "Dairy", listName: "Inbox", sortOrder: 0)]],
+      memberships: [
+        "L1": StoredMemberships(
+          data: #"{"minimumSupportedVersion":20230430,"memberships":[{"memberID":"R1","groupID":"S1","modifiedOn":1}]}"#
+        )
+      ])
+    #expect(try await harness.run(["sections", "inbox"]) == 0)
+    #expect(harness.output.text.contains("Dairy"))
+    #expect(try await harness.run(["list", "Inbox", "--section", "dai", "--json"]) == 0)
+    #expect(harness.output.text.contains(#""title" : "Milk""#))
+    #expect(!harness.output.text.contains(#""title" : "Bread""#))
+    #expect(try await harness.run(["list", "Inbox", "--section", "Frozen", "--json"]) == 1)
+    #expect(harness.errors.text.contains("SECTION_NOT_FOUND"))
+  }
+
+  @Test("delete-section needs --confirm outside JSON mode, like delete-list")
+  func deleteSectionConfirmation() async throws {
+    let harness = Harness()
+    #expect(try await harness.run(["delete-section", "Inbox", "Dairy"]) == 1)
+    #expect(harness.errors.text.contains("Section deletion requires --confirm flag"))
+    #expect(harness.errors.text.contains(#"delete-section "Inbox" "Dairy" --confirm"#))
+    #expect(!harness.errors.text.contains("not implemented"))
+    // Past the guard, it isn't implemented yet.
+    #expect(try await harness.run(["delete-section", "Inbox", "Dairy", "--confirm", "--json"]) == 1)
+    #expect(try await harness.run(["delete-section", "Inbox", "Dairy", "--json"]) == 1)
+    #expect(harness.errors.text.components(separatedBy: "NOT_IMPLEMENTED").count == 3)
+  }
+
+  @Test("changing sections reports NOT_IMPLEMENTED, and so do sections without a section store")
   func sectionOptions() async throws {
     let harness = Harness()
     #expect(try await harness.run(["add", "Inbox", "Milk", "--section", "Dairy", "--json"]) == 1)
     #expect(try await harness.run(["list", "Inbox", "--section", "Dairy", "--json"]) == 1)
-    #expect(harness.errors.text.components(separatedBy: "NOT_IMPLEMENTED").count == 3)
+    #expect(try await harness.run(["sections", "Inbox", "--json"]) == 1)
+    #expect(harness.errors.text.components(separatedBy: "NOT_IMPLEMENTED").count == 4)
     #expect(await harness.store.allReminders.isEmpty)
   }
 

@@ -37,12 +37,12 @@ struct ListContents: ConsoleCommand {
   static let configuration = CommandConfiguration(commandName: "list", abstract: "Show contents of a reminder list")
   @OptionGroup var globals: GlobalOptions
   @Argument(help: "List name (fuzzy matched)") var name: String
-  @Option(help: "Filter by section") var section: String?
+  @Option(help: "Only reminders in this section (fuzzy matched)") var section: String?
   @Flag(help: "Include completed reminders") var includeCompleted = false
 
   func run(in context: CommandContext) async throws {
-    if section != nil { throw RemindersError.notImplemented("Filtering by section (--section)") }
-    context.console.show(try await context.service.contents(ofList: name, includeCompleted: includeCompleted))
+    context.console.show(
+      try await context.service.contents(ofList: name, section: section, includeCompleted: includeCompleted))
   }
 }
 

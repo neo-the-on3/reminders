@@ -7,7 +7,7 @@ struct Sections: ConsoleCommand {
   @Argument(help: "List name (fuzzy matched)") var list: String
 
   func run(in context: CommandContext) async throws {
-    throw RemindersError.notImplemented("sections")
+    context.console.show(try await context.service.sections(ofList: list))
   }
 }
 
@@ -38,8 +38,14 @@ struct DeleteSection: ConsoleCommand {
   @OptionGroup var globals: GlobalOptions
   @Argument(help: "List name (fuzzy matched)") var list: String
   @Argument(help: "Section name (fuzzy matched)") var name: String
+  @Flag(help: "Confirm deletion (required unless --json)") var confirm = false
 
   func run(in context: CommandContext) async throws {
+    guard confirm || context.console.isJSON else {
+      throw RemindersError(
+        .invalidArgument, "Section deletion requires --confirm flag",
+        suggestion: "Run: \(ProductInfo.name) delete-section \"\(list)\" \"\(name)\" --confirm")
+    }
     throw RemindersError.notImplemented("delete-section")
   }
 }

@@ -10,6 +10,10 @@
   /// identifier.
   public actor EventKitReminderStore: ReminderStore {
     private let store = EKEventStore()
+    /// Lists this store created or deleted, so `lists()` reflects its own changes even before EventKit's
+    /// calendar cache does. Every change commits immediately, so later lookups by identifier already see them.
+    private var createdLists: Set<String> = []
+    private var deletedLists: Set<String> = []
 
     public init() {}
 
@@ -33,7 +37,13 @@
     // MARK: Reading
 
     public func lists() -> [ReminderList] {
-      store.calendars(for: .reminder).map { ReminderList(id: $0.calendarIdentifier, title: $0.title) }
+      var calendars = store.calendars(for: .reminder)
+      let listed = Set(calendars.map(\.calendarIdentifier))
+      calendars += createdLists.subtracting(listed).sorted().compactMap { try? calendar(id: $0) }
+      return
+        calendars
+        .filter { !deletedLists.contains($0.calendarIdentifier) }
+        .map { ReminderList(id: $0.calendarIdentifier, title: $0.title) }
     }
 
     public func reminders(inLists listIDs: [String]?, _ filter: CompletionFilter) async throws(RemindersError)
@@ -114,6 +124,8 @@
       } catch {
         throw RemindersError(.storeFailure, "Create list failed: \(error.localizedDescription)")
       }
+      createdLists.insert(calendar.calendarIdentifier)
+      deletedLists.remove(calendar.calendarIdentifier)
       return calendar.calendarIdentifier
     }
 
@@ -124,12 +136,16 @@
       } catch {
         throw RemindersError(.storeFailure, "Delete list failed: \(error.localizedDescription)")
       }
+      createdLists.remove(id)
+      deletedLists.insert(id)
     }
 
     // MARK: Lookups
 
     private func calendar(id: String) throws(RemindersError) -> EKCalendar {
-      guard let calendar = store.calendar(withIdentifier: id), calendar.allowedEntityTypes.contains(.reminder) else {
+      guard !deletedLists.contains(id), let calendar = store.calendar(withIdentifier: id),
+        calendar.allowedEntityTypes.contains(.reminder)
+      else {
         throw RemindersError(.listNotFound, "List '\(id)' not found")
       }
       return calendar

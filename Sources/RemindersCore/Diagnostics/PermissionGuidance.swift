@@ -80,4 +80,12 @@ public struct PermissionGuidance: Hashable, Sendable {
         suggestion: remedy(for: access))
     }
   }
+
+  /// The error section commands report when they can't read the Reminders database.
+  public var fullDiskAccessError: RemindersError {
+    RemindersError(
+      .permissionDenied, "Cannot read the Reminders database, which sections need (no Full Disk Access for \(holder))",
+      suggestion: "Add \(holder) in \(SettingsPane.fullDiskAccess.location), then restart \(holder). "
+        + "Everything except sections works without it")
+  }
 }

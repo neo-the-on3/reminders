@@ -13,7 +13,8 @@ assistants.
 
 ## Requirements
 
-- macOS 26 or later to use it. Linux builds and tests the platform-independent core for development and CI.
+- macOS 26 or later to use it. Linux builds and tests the platform-independent core for development and CI; it
+  needs SQLite's headers (`sudo apt-get install libsqlite3-dev`).
 - Swift 6.4.1 and SwiftLint 0.65.1, pinned in [`mise.toml`](mise.toml). Install [mise](https://mise.jdx.dev),
   then run `mise install`. On a Mac, Xcode 26's Swift 6.x toolchain also works.
 - Formatting uses Apple's [swift-format](https://github.com/swiftlang/swift-format) (`swift format`), which ships
@@ -270,8 +271,10 @@ Five targets with one-way dependencies (`RemindersCLI` → `RemindersMCP`, `Remi
   - `RemindersError`: one error type with stable machine-readable codes; core APIs use typed throws.
 - **`RemindersApple`**: the platform. `EventKitReminderStore` is an actor that owns the `EKEventStore`;
   EventKit objects never leave it (fetches convert to `Reminder` values, changes look items up by identifier).
-  `MacSystemProbe` provides the machine facts. It compiles everywhere: off macOS, `UnsupportedPlatformStore`
-  answers every call with `UNSUPPORTED_PLATFORM`.
+  `DatabaseSectionStore` reads sections from Reminders' SQLite databases (one per account) through a
+  `SQLiteDatabase` connection that is opened read-only, via the `CSQLite` system library (`libsqlite3-dev` on
+  Linux). `MacSystemProbe` provides the machine facts. It compiles everywhere: off macOS,
+  `UnsupportedPlatformStore` answers every call with `UNSUPPORTED_PLATFORM`.
 - **`RemindersMCP`**: the MCP server on the official [MCP Swift SDK](https://github.com/modelcontextprotocol/swift-sdk)
   (pinned to 0.12.1). `ReminderTool` is an enum of the tools with their schemas and annotations;
   `RemindersToolbox` validates arguments against those schemas (`ToolArguments`) and calls `RemindersService`,

@@ -29,8 +29,8 @@ jobs:
           key: spm-linux-${{ hashFiles('mise.toml', 'Package.swift', 'Package.resolved') }}
           restore-keys: spm-linux-
 
-      # zsh and fish let the completion tests syntax-check every generated script
-      - run: sudo apt-get update -qq && sudo apt-get install -y -qq zsh fish
+      # zsh and fish let the completion tests syntax-check every generated script; the section reader links SQLite
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq zsh fish libsqlite3-dev
       - run: swift --version && swiftlint version
       - name: Lint (swift-format + SwiftLint, strict)
         run: mise run lint

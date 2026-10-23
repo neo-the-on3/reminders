@@ -293,6 +293,11 @@ Five targets with one-way dependencies (`RemindersCLI` → `RemindersMCP`, `Remi
   [`scripts/date-reference-cases.mjs`](scripts/date-reference-cases.mjs) (instructions inside).
 - **Text output**: the human-readable output for a fixed sample, with colour off and on and verbose or not, must
   match [`RenderingFixtures.swift`](Tests/RemindersCoreTests/RenderingFixtures.swift) byte for byte.
+- **Sections**: membership edits must produce the exact bytes, checksum and token-map counters in
+  [`SectionFixtures.swift`](Tests/RemindersCoreTests/Fixtures/SectionFixtures.swift). Those fixtures follow the
+  documented formats until they're replaced by real data: on a Mac, run
+  [`scripts/capture-section-fixtures.sh`](scripts/capture-section-fixtures.sh) `"<throwaway list>"`, which copies
+  the Reminders database and reads only the copy.
 
 The completion tests also syntax-check each generated script with `bash -n`, `zsh -n` and `fish -n` when those
 shells are installed. Every command is also tested end to end against `InMemoryReminderStore`, and so is every

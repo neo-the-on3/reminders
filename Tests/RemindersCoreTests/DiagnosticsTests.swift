@@ -188,10 +188,14 @@ struct DiagnosticsTests {
     #expect(!output.text.contains("macOS won't show the prompt again"))
   }
 
-  @Test("authorize with --json prints only the outcome")
-  func authorizeJSON() async {
+  @Test("authorize with --json prints only the outcome, failing without access")
+  func authorizeJSON() async throws {
     let (console, output, _) = makeConsole(json: true)
-    console.show(await diagnostics(access: .denied).authorize(narratingTo: console))
+    let diagnostics = diagnostics(access: .denied)
+    let report = await diagnostics.authorize(narratingTo: console)
+    let failure = try #require(diagnostics.failure(of: report))
+    console.show(report, failure: failure)
+    #expect(failure.code == .permissionDenied)
     #expect(
       output.text == """
         {
@@ -203,9 +207,45 @@ struct DiagnosticsTests {
             },
             "remindersAccess" : "denied"
           },
-          "success" : true
+          "error" : {
+            "code" : "PERMISSION_DENIED",
+            "message" : "Reminders access not granted (Denied for Terminal)",
+            "suggestion" : "\(try #require(failure.suggestion))"
+          },
+          "success" : false
         }
 
         """)
+  }
+
+  @Test("authorize only fails without full Reminders access; database access doesn't count")
+  func authorizeFailure() async {
+    let (console, _, _) = makeConsole(json: true)
+    let granted = diagnostics(system: FakeSystem(databases: nil))
+    #expect(granted.failure(of: await granted.authorize(narratingTo: console)) == nil)
+    for access in [ReminderAccess.notDetermined, .denied, .restricted, .writeOnly] {
+      let denied = diagnostics(access: access, promptAnswer: .denied)
+      #expect(denied.failure(of: await denied.authorize(narratingTo: console))?.code == .permissionDenied)
+    }
+    let unavailable = diagnostics(access: .unavailable)
+    #expect(unavailable.failure(of: await unavailable.authorize(narratingTo: console))?.code == .unsupportedPlatform)
+  }
+
+  @Test("a failing check makes the JSON report a CHECKS_FAILED failure that still carries the checks")
+  func doctorJSONFailure() async throws {
+    let report = await diagnostics(access: .denied).checkHealth()
+    let failure = try #require(report.failure)
+    #expect(failure.code == .checksFailed)
+    #expect(failure.message == "1 check(s) failed: Reminders access")
+    #expect(await diagnostics().checkHealth().failure == nil)
+
+    let (console, output, errors) = makeConsole(json: true)
+    console.show(report, failure: failure)
+    #expect(errors.text.isEmpty)
+    let json = try #require(
+      try JSONSerialization.jsonObject(with: Data(output.text.utf8)) as? [String: Any])
+    #expect(json["success"] as? Bool == false)
+    #expect((json["error"] as? [String: Any])?["code"] as? String == "CHECKS_FAILED")
+    #expect((json["data"] as? [Any])?.count == report.checks.count)
   }
 }

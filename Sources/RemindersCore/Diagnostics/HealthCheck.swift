@@ -28,6 +28,15 @@ public struct HealthReport: ConsoleRepresentable {
   public var failureCount: Int { checks.count { $0.status == .fail } }
   public var passed: Bool { failureCount == 0 }
 
+  /// `CHECKS_FAILED` naming the failing checks; nil when every check passed.
+  public var failure: RemindersError? {
+    let failed = checks.filter { $0.status == .fail }.map(\.name)
+    guard !failed.isEmpty else { return nil }
+    return RemindersError(
+      .checksFailed, "\(failed.count) check(s) failed: \(failed.joined(separator: ", "))",
+      suggestion: "See each failing check's detail for how to fix it")
+  }
+
   public func encode(to encoder: any Encoder) throws { try checks.encode(to: encoder) }
 
   public func text(using renderer: TextRenderer) -> String {

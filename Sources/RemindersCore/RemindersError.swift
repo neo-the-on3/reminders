@@ -12,6 +12,8 @@ public struct RemindersError: Error, Hashable, Sendable, Codable, CustomStringCo
     case databaseNotFound = "DB_NOT_FOUND"
     case syncTriggerFailed = "SYNC_TRIGGER_FAILED"
     case invalidArgument = "INVALID_ARGUMENT"
+    /// One or more `doctor` checks failed.
+    case checksFailed = "CHECKS_FAILED"
     /// The Reminders store refused an operation (a failed save or removal).
     case storeFailure = "STORE_FAILURE"
     /// Apple Reminders isn't available on this platform (any OS other than macOS).

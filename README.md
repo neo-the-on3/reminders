@@ -176,9 +176,13 @@ tool. Intentional differences:
 - **Permissions.** `doctor` never shows the permission prompt. It reports each access state separately (not
   requested yet, denied, restricted, write-only, granted) and names the app that holds the permission; only
   "not requested yet" points to `authorize`. Write-only access is not enough. A `Permissions app` check shows
-  which app macOS asks about. In text mode `doctor` exits 1 when a check fails; with `--json` the checks are
-  the result and it exits 0.
-  `authorize --json` prints the outcome (`remindersAccess`, `databaseAccess`) instead of nothing.
+  which app macOS asks about.
+- **`doctor` and `authorize` exit 1 on failure, with or without `--json`.** `doctor` fails when any check fails;
+  `authorize` fails unless Reminders access ends up fully granted (Full Disk Access is only needed for sections
+  and doesn't count). With `--json` both still print their result on stdout, as
+  `{"success": false, "data": ..., "error": ...}` when they fail: `CHECKS_FAILED` for `doctor`,
+  `PERMISSION_DENIED` for `authorize`. `authorize --json` prints the outcome (`remindersAccess`,
+  `databaseAccess`, `host`) instead of nothing.
 - **Search** uses Foundation's `localizedStandardContains`, so it ignores diacritics as well as case (`cafe`
   finds `Café`).
 - **Reminder lookups** use full EventKit identifiers internally, so changing a reminder never acts on a

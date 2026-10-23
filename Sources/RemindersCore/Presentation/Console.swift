@@ -42,7 +42,9 @@ public protocol ConsoleRepresentable: Encodable, Sendable {
 /// Where commands send results and errors, in the format the user asked for.
 ///
 /// With `--json`, results go to stdout as `{"success": true, "data": ...}` and errors to stderr as
-/// `{"success": false, "error": {"code", "message", "suggestion"}}`, pretty-printed with sorted keys.
+/// `{"success": false, "error": {"code", "message", "suggestion"}}`, pretty-printed with sorted keys. A result that
+/// is itself a failure (a failing `doctor` check, `authorize` without access) goes to stdout as
+/// `{"success": false, "data": ..., "error": {...}}`.
 public struct Console: Sendable {
   public enum Format: Sendable, Hashable {
     case text, json
@@ -74,11 +76,14 @@ public struct Console: Sendable {
   public var isJSON: Bool { format == .json }
   public var style: TerminalStyle { renderer.style }
 
-  /// Shows a command's result.
-  public func show(_ value: some ConsoleRepresentable) {
-    switch format {
-    case .text: output.write(value.text(using: renderer))
-    case .json: output.write(Self.encode(SuccessEnvelope(data: value)))
+  /// Shows a command's result. Pass `failure` when the result reports that the command failed: JSON then says
+  /// `"success": false` and carries the error next to the data, while text shows the result alone, which already
+  /// explains what went wrong. The caller still decides the exit status.
+  public func show(_ value: some ConsoleRepresentable, failure: RemindersError? = nil) {
+    switch (format, failure) {
+    case (.text, _): output.write(value.text(using: renderer))
+    case (.json, nil): output.write(Self.encode(SuccessEnvelope(data: value)))
+    case (.json, let error?): output.write(Self.encode(PartialFailureEnvelope(data: value, error: error)))
     }
   }
 
@@ -110,6 +115,12 @@ public struct Console: Sendable {
 private struct SuccessEnvelope<Data: Encodable>: Encodable {
   let success = true
   let data: Data
+}
+
+private struct PartialFailureEnvelope<Data: Encodable>: Encodable {
+  let success = false
+  let data: Data
+  let error: RemindersError
 }
 
 private struct FailureEnvelope: Encodable {

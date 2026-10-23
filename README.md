@@ -4,12 +4,13 @@ A fast, native command-line tool for Apple Reminders, with section support and i
 no Node.js or helper processes, with `--json` output for scripts and an MCP server mode (`reminders --mcp`) for AI
 assistants.
 
-> **Status: lists and reminders work; sections are next.** `lists`, `list`, `today`, `overdue`, `upcoming`,
+> **Status: lists and reminders work; sections can be read.** `lists`, `list`, `today`, `overdue`, `upcoming`,
 > `search`, `add`, `complete`, `update`, `delete`, `create-list`, `delete-list`, `authorize` and `doctor` work
 > against Apple Reminders through EventKit, from the command line and as MCP tools; `setup-claude`,
-> `setup-claude-code` and `setup-cursor` register the MCP server with those clients. Section commands, tools and
-> `--section` options, and `demo`, arrive in follow-up PRs; until then they fail with a structured
-> `NOT_IMPLEMENTED` error.
+> `setup-claude-code` and `setup-cursor` register the MCP server with those clients. `sections` and
+> `list --section` read sections from the Reminders database (they need Full Disk Access). Changing sections
+> (`create-section`, `delete-section`, `move`, `add --section`) and `demo` arrive in follow-up PRs; until then
+> they fail with a structured `NOT_IMPLEMENTED` error.
 
 ## Requirements
 
@@ -341,7 +342,7 @@ tool. Intentional differences:
 - **Usage errors exit 64.** A non-numeric `upcoming --days`, an unknown `--priority`, or an unsupported shell for
   `completions` is reported by the argument parser with exit status 64.
 - **Error codes.** Unknown sections report `SECTION_NOT_FOUND` (not `LIST_NOT_FOUND`). Unported commands and
-  options report `NOT_IMPLEMENTED`, including `list --section` (which the original accepted but ignored). Failed
+  options report `NOT_IMPLEMENTED`. `list --section` filters (the original accepted it but ignored it). Failed
   EventKit saves and removals report `STORE_FAILURE`. The setup commands report `CONFIG_INVALID`,
   `CONFIG_CONFLICT` and `SETUP_FAILED`. Reminders commands on a platform without Apple Reminders
   report `UNSUPPORTED_PLATFORM`.

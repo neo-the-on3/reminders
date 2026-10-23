@@ -26,8 +26,7 @@ struct CommandContext: Sendable {
     let system = RemindersPlatform.makeSystemProbe()
     return CommandContext(
       console: .standard(format: globals.json ? .json : .text, verbose: globals.verbose),
-      service: RemindersService(
-        store: RemindersPlatform.makeStore(), permissions: PermissionGuidance(host: system.hostApplication)),
+      service: RemindersPlatform.makeService(system: system),
       system: system)
   }
 }

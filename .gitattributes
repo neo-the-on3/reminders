@@ -28,6 +28,8 @@
 *.sqlite binary
 
 # GitHub linguist: generated test fixtures don't count toward language stats and are collapsed in diffs
+Tests/RemindersCoreTests/DateReferenceCases.swift linguist-generated=true
+Tests/RemindersCoreTests/RenderingFixtures.swift linguist-generated=true
 Tests/RemiCoreTests/ChronoFixtures.swift linguist-generated=true
 Tests/RemiCoreTests/OutputFixtures.swift linguist-generated=true
 Package.resolved linguist-generated=true

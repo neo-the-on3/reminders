@@ -1,0 +1,52 @@
+/// An error every command reports the same way: a stable machine-readable ``Code``, a message for people and an
+/// optional suggestion. In `--json` mode it is printed as `{"success": false, "error": {...}}`.
+public struct RemindersError: Error, Hashable, Sendable, Codable, CustomStringConvertible {
+  /// Machine-readable error codes. Scripts can rely on these values.
+  public enum Code: String, CaseIterable, Hashable, Sendable, Codable {
+    case permissionDenied = "PERMISSION_DENIED"
+    case listNotFound = "LIST_NOT_FOUND"
+    case reminderNotFound = "REMINDER_NOT_FOUND"
+    case sectionNotFound = "SECTION_NOT_FOUND"
+    case ambiguousReminder = "AMBIGUOUS_REMINDER"
+    case reminderKitUnavailable = "REMINDERKIT_UNAVAILABLE"
+    case databaseNotFound = "DB_NOT_FOUND"
+    case syncTriggerFailed = "SYNC_TRIGGER_FAILED"
+    case invalidArgument = "INVALID_ARGUMENT"
+    /// The Reminders store refused an operation (a failed save or removal).
+    case storeFailure = "STORE_FAILURE"
+    /// Apple Reminders isn't available on this platform (any OS other than macOS).
+    case unsupportedPlatform = "UNSUPPORTED_PLATFORM"
+    /// The command exists but isn't implemented yet.
+    case notImplemented = "NOT_IMPLEMENTED"
+    case unknown = "UNKNOWN"
+  }
+
+  public var code: Code
+  public var message: String
+  public var suggestion: String?
+
+  public init(_ code: Code, _ message: String, suggestion: String? = nil) {
+    self.code = code
+    self.message = message
+    self.suggestion = suggestion
+  }
+
+  public var description: String { message }
+}
+
+extension RemindersError {
+  /// A command or option that exists in the CLI but isn't implemented yet.
+  public static func notImplemented(_ feature: String) -> RemindersError {
+    RemindersError(
+      .notImplemented, "\(feature) is not implemented yet", suggestion: "Track progress at \(ProductInfo.homepage)")
+  }
+
+  /// Any error as a ``RemindersError``; errors of other types become ``Code/unknown``.
+  public init(wrapping error: any Error) {
+    if let error = error as? RemindersError {
+      self = error
+    } else {
+      self.init(.unknown, String(describing: error))
+    }
+  }
+}

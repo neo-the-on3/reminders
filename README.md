@@ -146,8 +146,10 @@ reminders setup-cursor                    # Cursor, every project (--project <di
   which lives in a versioned `Cellar` directory that upgrades delete, it's
   `$(brew --prefix)/opt/reminders/bin/reminders` instead (or `$(brew --prefix)/bin/reminders`).
 - **Merging.** Claude Desktop's `~/Library/Application Support/Claude/claude_desktop_config.json` and Cursor's
-  `~/.cursor/mcp.json` (or `<dir>/.cursor/mcp.json`) are edited in place: other servers and settings, their order
-  and the file's indentation are kept. The file and its folder are created when missing. Before a change the
+  `~/.cursor/mcp.json` (or `<dir>/.cursor/mcp.json`) are edited in place. Only the `reminders` entry's text
+  changes: everything else (other servers and settings, their order, spacing, one-line objects, line endings) is
+  kept byte for byte, so `--remove` after adding gives back the original file. A new entry is laid out like its
+  neighbours, using the file's indentation. The file and its folder are created when missing. Before a change the
   original is copied to `<file>.bak-<YYYYMMDD-HHMMSS>`, and the new file is written atomically. A file that isn't
   valid JSON is left alone and reported with its line and column (`CONFIG_INVALID`).
 - **Claude Code** owns its config, so `setup-claude-code` runs

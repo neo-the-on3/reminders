@@ -31,6 +31,17 @@ let package = Package(
         "RemiCore",
         "RemiApple",
         .product(name: "ArgumentParser", package: "swift-argument-parser"),
+      ],
+      linkerSettings: [
+        // Embed Support/Info.plist in the executable (__TEXT,__info_plist). macOS reads the bundle identifier
+        // and the Reminders usage descriptions from it when remi asks for Reminders access.
+        .unsafeFlags(
+          [
+            "-Xlinker", "-sectcreate", "-Xlinker", "__TEXT", "-Xlinker", "__info_plist",
+            "-Xlinker", Context.packageDirectory + "/Support/Info.plist",
+          ],
+          .when(platforms: [.macOS])
+        )
       ]
     ),
     .testTarget(

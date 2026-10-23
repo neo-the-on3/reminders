@@ -10,8 +10,8 @@ description = "Debug build"
 run = "swift build"
 
 [tasks.release]
-description = "Release build of the remi binary"
-run = "swift build -c release --product remi"
+description = "Release build of the remi binary (embedded Info.plist, ad-hoc signed on macOS)"
+run = "scripts/build-release.sh"
 
 [tasks.test]
 description = "Run unit tests"

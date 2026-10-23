@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Embedded into the remi executable's __TEXT,__info_plist section by the linker (see Package.swift).
+  macOS needs the usage descriptions to show the Reminders permission prompt for a command-line tool.
+-->
+<plist version="1.0">
+<dict>
+	<key>CFBundleIdentifier</key>
+	<string>io.github.neo-the-on3.remi</string>
+	<key>CFBundleName</key>
+	<string>remi</string>
+	<key>CFBundleDisplayName</key>
+	<string>remi</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.2.1</string>
+	<key>CFBundleVersion</key>
+	<string>0.2.1</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>26.0</string>
+	<key>NSRemindersUsageDescription</key>
+	<string>remi needs access to your reminders to list, create, update and complete them.</string>
+	<key>NSRemindersFullAccessUsageDescription</key>
+	<string>remi needs access to your reminders to list, create, update and complete them.</string>
+</dict>
+</plist>

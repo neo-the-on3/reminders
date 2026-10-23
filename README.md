@@ -4,9 +4,10 @@ A fast, native command-line tool for Apple Reminders, with section support and i
 no Node.js or helper processes, with `--json` output for scripts and (planned) an MCP server mode for AI
 assistants.
 
-> **Status: foundation.** The platform-independent core (dates, recurrence, name matching, output, section-sync
-> bookkeeping) is done and tested. Commands that talk to Apple Reminders arrive in follow-up PRs; until then they
-> fail with a structured `NOT_IMPLEMENTED` error.
+> **Status: lists and reminders work; sections are next.** `lists`, `list`, `today`, `overdue`, `upcoming`,
+> `search`, `add`, `complete`, `update`, `delete`, `create-list`, `delete-list`, `authorize` and `doctor` work
+> against Apple Reminders through EventKit. Section commands and `--section` options, `demo` and the MCP server
+> arrive in follow-up PRs; until then they fail with a structured `NOT_IMPLEMENTED` error.
 
 ## Requirements
 
@@ -34,11 +35,29 @@ To make that permanent: `mise settings use_versions_host=false`.
 ```sh
 git clone https://github.com/neo-the-on3/reminders && cd reminders
 mise install                      # or MISE_USE_VERSIONS_HOST=0 mise install
-swift build -c release --product reminders
-.build/release/reminders --help
+scripts/build-release.sh          # prints .build/release/reminders
+.build/release/reminders authorize
+.build/release/reminders lists
 ```
 
-Each CI run on macOS uploads the release binary as the `reminders-macos` artifact.
+Each CI run on macOS uploads the signed release binary as the `reminders-macos` artifact.
+
+### Reminders permission
+
+macOS asks once per terminal app (Terminal, iTerm, Cursor, …), not per tool. `reminders authorize` triggers the
+prompt and opens System Settings for anything still missing; `reminders doctor` checks everything without
+prompting. Any other command asks the first time too.
+
+macOS only prompts a command-line tool that carries a usage description, so the linker embeds
+[`Support/Info.plist`](Support/Info.plist) (bundle identifier `io.github.neo-the-on3.reminders` and
+`NSRemindersFullAccessUsageDescription`) as the binary's `__TEXT,__info_plist` section.
+[`scripts/build-release.sh`](scripts/build-release.sh) also ad-hoc signs the binary with that identifier and
+fails if the plist is missing. Check a binary with:
+
+```sh
+launchctl plist __TEXT,__info_plist .build/release/reminders
+codesign -dv .build/release/reminders     # Identifier=io.github.neo-the-on3.reminders, Signature=adhoc
+```
 
 ### Shell completions
 
@@ -61,15 +80,16 @@ Completions cover every command and alias (`ls`, `done`, `rm`), and each command
 
 ```sh
 mise run build     # swift build
-mise run release   # swift build -c release --product reminders
+mise run release   # scripts/build-release.sh (signed on macOS)
 mise run test      # swift test
+mise run integration  # Apple Reminders integration tests (macOS, see Testing)
 mise run lint      # swift format lint --strict + swiftlint --strict (fails on any violation)
 mise run format    # swift format --in-place
 ```
 
 ## Design
 
-Three targets with one-way dependencies:
+Four targets with one-way dependencies (`RemindersCLI` → `RemindersApple` → `RemindersCore`):
 
 - **`RemindersCore`**: the platform-independent core, Foundation only, so it builds and is tested on Linux.
   - `Model/`: value types. `Reminder`, `ReminderList`, `Section`, `Priority`, `CalendarDay` (a time-zone-free
@@ -84,11 +104,22 @@ Three targets with one-way dependencies:
   - `SectionSync/`: what Reminders stores for sections: `SectionMemberships` (with its SHA-512 checksum) and
     `ResolutionTokenMap` (the vector clocks that make iCloud push a change). They edit stored JSON in place, keeping
     unknown fields, key order and number formatting, because Reminders checksums the exact bytes.
+  - `Store/`: the `ReminderStore` protocol (`Sendable`, async, typed throws), which is everything the commands
+    need from a reminders database, plus `InMemoryReminderStore`, an actor used by the tests.
+  - `Service/`: `RemindersService`, the commands as operations on any store: access checks, list resolution,
+    counts, the today/overdue/upcoming/search filters and the changes. It returns `ConsoleRepresentable` values.
+  - `Diagnostics/`: `doctor`'s checks and `authorize`'s steps, against a `SystemProbe` (macOS version, embedded
+    Info.plist, database directory, opening System Settings).
   - `RemindersError`: one error type with stable machine-readable codes; core APIs use typed throws.
+- **`RemindersApple`**: the platform. `EventKitReminderStore` is an actor that owns the `EKEventStore`;
+  EventKit objects never leave it (fetches convert to `Reminder` values, changes look items up by identifier).
+  `MacSystemProbe` provides the machine facts. It compiles everywhere: off macOS, `UnsupportedPlatformStore`
+  answers every call with `UNSUPPORTED_PLATFORM`.
 - **`RemindersCLI`**: the `reminders` executable, built on swift-argument-parser's `AsyncParsableCommand`. Each
-  command conforms to `ConsoleCommand`, which renders results and errors consistently and maps failures to exit
-  status 1 (usage errors exit 64).
-- **Tests**: Swift Testing suites for both targets.
+  command conforms to `ConsoleCommand` and runs in a `CommandContext` (console, service, system probe), which
+  renders results and errors consistently and maps failures to exit status 1 (usage errors exit 64). Tests run
+  commands in a context backed by the in-memory store.
+- **Tests**: Swift Testing suites for each target, plus opt-in integration tests.
 
 ## Testing
 
@@ -101,7 +132,21 @@ Three targets with one-way dependencies:
   match [`RenderingFixtures.swift`](Tests/RemindersCoreTests/RenderingFixtures.swift) byte for byte.
 
 The completion tests also syntax-check each generated script with `bash -n`, `zsh -n` and `fish -n` when those
-shells are installed.
+shells are installed. Every command is also tested end to end against `InMemoryReminderStore`.
+
+### Integration tests (macOS)
+
+`RemindersIntegrationTests` drive the `reminders` binary with `--json` against Apple Reminders. They only touch a
+throwaway list named `_reminders_test_<hex>`, which they delete afterwards (leftovers from interrupted runs are
+removed at the start). They're skipped unless you opt in:
+
+```sh
+REMINDERS_INTEGRATION=1 swift test --filter RemindersIntegrationTests   # or: mise run integration
+# Test a particular binary, such as the signed release build:
+REMINDERS_BINARY="$(scripts/build-release.sh)" REMINDERS_INTEGRATION=1 swift test --filter RemindersIntegrationTests
+```
+
+Run `reminders authorize` first: the terminal app needs Reminders access.
 
 ## Behaviour notes
 
@@ -118,9 +163,18 @@ tool. Intentional differences:
   being passed through.
 - **Usage errors exit 64.** A non-numeric `upcoming --days`, an unknown `--priority`, or an unsupported shell for
   `completions` is reported by the argument parser with exit status 64.
-- **Error codes.** Unknown sections report `SECTION_NOT_FOUND` (not `LIST_NOT_FOUND`). Unported commands report
-  `NOT_IMPLEMENTED`. Store failures will report `STORE_FAILURE`, and running Reminders commands on a platform
-  without Apple Reminders `UNSUPPORTED_PLATFORM`.
+- **Error codes.** Unknown sections report `SECTION_NOT_FOUND` (not `LIST_NOT_FOUND`). Unported commands and
+  options report `NOT_IMPLEMENTED`, including `list --section` (which the original accepted but ignored). Failed
+  EventKit saves and removals report `STORE_FAILURE`. Reminders commands on a platform without Apple Reminders
+  report `UNSUPPORTED_PLATFORM`.
+- **Permissions.** `doctor` never shows the permission prompt; it reports access that hasn't been requested yet
+  as `Not requested yet` and points to `authorize`. Write-only access is reported as such and is not enough. In
+  text mode `doctor` exits 1 when a check fails; with `--json` the checks are the result and it exits 0.
+  `authorize --json` prints the outcome (`remindersAccess`, `databaseAccess`) instead of nothing.
+- **Search** uses Foundation's `localizedStandardContains`, so it ignores diacritics as well as case (`cafe`
+  finds `Café`).
+- **Reminder lookups** use full EventKit identifiers internally, so changing a reminder never acts on a
+  different reminder that shares an identifier prefix.
 - **Text matching** follows Swift string semantics: canonically equivalent names match (`é` typed either way),
   and table columns are measured in terminal cells, so wide characters line up.
 - **Corrupt section data** is reported as an error and never overwritten.

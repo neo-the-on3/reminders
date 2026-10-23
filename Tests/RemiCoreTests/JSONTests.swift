@@ -83,17 +83,17 @@ struct JSONTests {
         == #"{"a":[{"c":2,"d":1}],"b":{"x":2,"y":1}}"#)
   }
 
-  @Test("encodes domain types with TypeScript key order, omitting nil fields")
+  @Test("encodes reminders and lists with remi's helper key order (sorted, then section/flagged), omitting nil fields")
   func domainTypes() {
     let reminder = Reminder(
       id: "1", title: "T", listID: "L", listName: "List", priority: .low, notes: "n", flagged: false)
     #expect(
       reminder.jsonValue.stringified()
-        == #"{"id":"1","title":"T","isCompleted":false,"listID":"L","listName":"List","priority":"low","notes":"n","flagged":false}"#
+        == #"{"id":"1","isCompleted":false,"listID":"L","listName":"List","notes":"n","priority":"low","title":"T","flagged":false}"#
     )
     #expect(
       ReminderList(id: "x", title: "Y", reminderCount: 2, overdueCount: 0).jsonValue.stringified()
-        == #"{"id":"x","title":"Y","reminderCount":2,"overdueCount":0}"#)
+        == #"{"id":"x","overdueCount":0,"reminderCount":2,"title":"Y"}"#)
     #expect(
       Section(id: "s", displayName: "D", listName: "L", sortOrder: 3).jsonValue.stringified()
         == #"{"id":"s","displayName":"D","listName":"L","sortOrder":3}"#)

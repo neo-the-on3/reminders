@@ -155,29 +155,36 @@ public struct TokenMapEntry: Equatable, Sendable, Codable {
 /// Resolution token map (CRDT vector clocks for sync), keyed by field name.
 public typealias TokenMap = [String: TokenMapEntry]
 
-// MARK: - JSON representations (TypeScript property order)
+// MARK: - JSON representations
+//
+// remi's `--json` output re-serialises what its Swift helper printed with `JSONEncoder` and
+// `.sortedKeys`, so reminders and lists come out with alphabetically sorted keys. Fields remi's
+// TypeScript adds afterwards (`section`, `flagged`) follow. Nil fields are omitted.
 
 extension ReminderList: JSONValueConvertible {
   public var jsonValue: JSONValue {
     .object([
-      ("id", .string(id)), ("title", .string(title)),
-      ("reminderCount", .number(Double(reminderCount))), ("overdueCount", .number(Double(overdueCount))),
+      ("id", .string(id)), ("overdueCount", .number(Double(overdueCount))),
+      ("reminderCount", .number(Double(reminderCount))), ("title", .string(title)),
     ])
   }
 }
 
 extension Reminder: JSONValueConvertible {
   public var jsonValue: JSONValue {
-    var fields: [(String, JSONValue)] = [
-      ("id", .string(id)), ("title", .string(title)), ("isCompleted", .bool(isCompleted)),
-      ("listID", .string(listID)), ("listName", .string(listName)), ("priority", .string(priority.rawValue)),
-    ]
-    if let dueDate { fields.append(("dueDate", .string(dueDate))) }
+    var fields: [(String, JSONValue)] = []
     if let completionDate { fields.append(("completionDate", .string(completionDate))) }
-    if let notes { fields.append(("notes", .string(notes))) }
-    if let section { fields.append(("section", .string(section))) }
+    if let dueDate { fields.append(("dueDate", .string(dueDate))) }
+    fields.append(("id", .string(id)))
+    fields.append(("isCompleted", .bool(isCompleted)))
     if let isRecurring { fields.append(("isRecurring", .bool(isRecurring))) }
+    fields.append(("listID", .string(listID)))
+    fields.append(("listName", .string(listName)))
+    if let notes { fields.append(("notes", .string(notes))) }
+    fields.append(("priority", .string(priority.rawValue)))
     if let recurrence { fields.append(("recurrence", .string(recurrence))) }
+    fields.append(("title", .string(title)))
+    if let section { fields.append(("section", .string(section))) }
     if let flagged { fields.append(("flagged", .bool(flagged))) }
     return .object(fields)
   }

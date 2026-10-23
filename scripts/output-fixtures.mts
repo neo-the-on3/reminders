@@ -22,6 +22,16 @@ const root = pathToFileURL(`${process.cwd()}/`).href;
 const chalk = (await import(new URL("node_modules/chalk/source/index.js", root).href)).default;
 const out = await import(new URL("src/cli/output.ts", root).href);
 
+// remi's reminders/lists arrive from its Swift helper with sorted keys (JSONEncoder .sortedKeys);
+// `section`/`flagged` are added afterwards by the TypeScript.
+function helperOrder<T extends Record<string, unknown>>(o: T): T {
+	const late = ["section", "flagged"];
+	const keys = Object.keys(o).filter((k) => !late.includes(k)).sort();
+	const out: Record<string, unknown> = {};
+	for (const k of [...keys, ...late.filter((k) => k in o)]) out[k] = o[k];
+	return out as T;
+}
+
 const reminders = [
 	{ id: "A1", title: "Buy milk", isCompleted: false, listID: "L1", listName: "Groceries", priority: "high", dueDate: "2026-10-23", notes: "Organic only, the big bottle from the shop round the corner please", section: "Dairy", flagged: true },
 	{ id: "A2", title: "Pay rent", isCompleted: false, listID: "L2", listName: "Home", priority: "medium", dueDate: "2026-10-20", isRecurring: true, recurrence: "monthly" },
@@ -31,12 +41,12 @@ const reminders = [
 	{ id: "A6", title: "File taxes", isCompleted: false, listID: "L3", listName: "Admin", priority: "none", dueDate: "2027-04-01", section: "Money" },
 	{ id: "A7", title: "Read book", isCompleted: false, listID: "L3", listName: "Admin", priority: "none", notes: "Short note" },
 	{ id: "A8", title: "Soon", isCompleted: false, listID: "L3", listName: "Admin", priority: "none", dueDate: "2026-10-28", section: "Dairy" },
-];
+].map(helperOrder);
 const lists = [
 	{ id: "L1", title: "Groceries", reminderCount: 12, overdueCount: 0 },
 	{ id: "L2", title: "Home 🏠", reminderCount: 3, overdueCount: 2 },
 	{ id: "L3", title: "Ad", reminderCount: 0, overdueCount: 0 },
-];
+].map(helperOrder);
 const sections = [
 	{ id: "S1", displayName: "Dairy", listName: "Groceries", sortOrder: 0 },
 	{ id: "S2", displayName: "Produce", listName: "Groceries", sortOrder: 1 },

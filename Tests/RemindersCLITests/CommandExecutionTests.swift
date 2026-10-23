@@ -68,6 +68,22 @@ struct CommandExecutionTests {
     #expect(harness.output.text.contains(#""priority" : "high""#))
   }
 
+  @Test(
+    "a negative upcoming --days is INVALID_ARGUMENT, written either way", arguments: [["--days", "-1"], ["--days=-1"]])
+  func negativeDays(_ days: [String]) async throws {
+    let harness = Harness()
+    #expect(try await harness.run(["upcoming", "--json"] + days) == 1)
+    #expect(harness.errors.text.contains(#""code" : "INVALID_ARGUMENT""#))
+    #expect(harness.errors.text.contains("Days must be 0 or more (got -1)"))
+  }
+
+  @Test("upcoming --days 0 is today only")
+  func upcomingToday() async throws {
+    let harness = Harness()
+    #expect(try await harness.run(["upcoming", "--days", "0"]) == 0)
+    #expect(harness.output.text.contains("Due today"))
+  }
+
   @Test("delete and delete-list need --confirm outside JSON mode")
   func confirmation() async throws {
     let harness = Harness()

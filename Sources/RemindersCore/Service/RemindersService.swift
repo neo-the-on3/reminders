@@ -76,14 +76,29 @@ public struct RemindersService: Sendable {
     ReminderListing(try await incomplete(where: clock.isOverdue), heading: "Overdue", layout: .overdue)
   }
 
-  /// `reminders upcoming`: incomplete reminders due within `days` days from now, overdue ones included.
+  /// `reminders upcoming`: incomplete reminders due from today through `days` days from today. Overdue ones are
+  /// left to `overdue`, so "what's coming up" never answers with something already late.
   public func upcoming(days: Int) async throws(RemindersError) -> ReminderListing {
-    let horizon = clock.calendar.date(byAdding: .day, value: days, to: clock.now) ?? clock.now
-    let reminders = try await incomplete { reminder in
-      guard let start = reminder.dueDate?.startDate(in: clock.calendar) else { return false }
-      return start <= horizon
+    guard days >= 0 else {
+      throw RemindersError(
+        .invalidArgument, "Days must be 0 or more (got \(days))", suggestion: "Use 0 for today, 7 for a week")
     }
-    return ReminderListing(reminders, heading: "Due in next \(days) days", layout: .upcoming)
+    let today = clock.today
+    let last = today.adding(days: days)
+    let reminders = try await incomplete { reminder in
+      guard let due = reminder.dueDate else { return false }
+      return today <= due && due <= last
+    }
+    return ReminderListing(reminders, heading: Self.upcomingHeading(days: days), layout: .upcoming)
+  }
+
+  /// "Due today", "Due today or tomorrow", "Due today and the next 7 days".
+  static func upcomingHeading(days: Int) -> String {
+    switch days {
+    case 0: "Due today"
+    case 1: "Due today or tomorrow"
+    default: "Due today and the next \(days) days"
+    }
   }
 
   /// `reminders search`: incomplete reminders whose title or notes contain `query`, ignoring case.

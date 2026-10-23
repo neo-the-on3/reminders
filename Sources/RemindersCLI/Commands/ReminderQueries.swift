@@ -11,9 +11,13 @@ struct Today: ConsoleCommand {
 }
 
 struct Upcoming: ConsoleCommand {
-  static let configuration = CommandConfiguration(abstract: "Show upcoming reminders")
+  static let configuration = CommandConfiguration(
+    abstract: "Show reminders due from today through the next N days",
+    discussion: "Overdue reminders aren't included; see 'overdue'.")
   @OptionGroup var globals: GlobalOptions
-  @Option(help: "Number of days to look ahead") var days = 7
+  // `.unconditional` takes the next word even when it starts with "-", so `--days -1` reaches the service's check
+  // (INVALID_ARGUMENT) instead of failing as a missing value.
+  @Option(parsing: .unconditional, help: "Days to look ahead after today (0 = today only)") var days = 7
 
   func run(in context: CommandContext) async throws {
     context.console.show(try await context.service.upcoming(days: days))

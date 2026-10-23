@@ -191,19 +191,47 @@ struct MCPSetupClaudeCodeTests {
     #expect(machine.calls == [[machine.claude, "mcp", "remove", "--scope", "user", "reminders"]])
   }
 
-  @Test("without claude on PATH the exact command is shown instead; --dry-run runs nothing")
+  @Test("without claude on PATH the exact command is shown instead, with --dry-run too")
   func manual() async throws {
     let machine = try Machine(claudeInstalled: false)
+    let add = "  claude mcp add --transport stdio --scope user reminders -- \(binary) --mcp\n"
     let report = try await machine.setup.configureClaudeCode(scope: .user, SetupOptions())
     #expect(report.outcome == .manual)
+    #expect(report.headline == "`claude` isn't on PATH, so nothing was changed. Run this to set up Claude Code:")
+    #expect(report.text(using: TextRenderer()).contains(add))
+    #expect(report.note?.contains("the app Claude Code runs in") == true)
+
+    let dry = try await machine.setup.configureClaudeCode(scope: .user, SetupOptions(dryRun: true))
+    #expect(dry.outcome == .manual)
+    #expect(dry.headline.hasSuffix("nothing would change. It would print the command to set up Claude Code:"))
+    #expect(dry.text(using: TextRenderer()).contains(add))
+    #expect(!dry.text(using: TextRenderer()).contains("Would run"))
+
+    let forced = try await machine.setup.configureClaudeCode(scope: .user, SetupOptions(force: true))
+    #expect(forced.commands?.map { $0[2] } == ["remove", "add"])
     #expect(machine.calls.isEmpty)
-    let text = report.text(using: TextRenderer())
-    #expect(text.contains("  claude mcp add --transport stdio --scope user reminders -- \(binary) --mcp\n"))
+
     let installed = try Machine()
-    let dry = try await installed.setup.configureClaudeCode(scope: .user, SetupOptions(dryRun: true))
-    #expect(dry.outcome == .added)
+    let wouldRun = try await installed.setup.configureClaudeCode(scope: .user, SetupOptions(dryRun: true))
+    #expect(wouldRun.outcome == .added)
     #expect(installed.calls.isEmpty)
-    #expect(dry.text(using: TextRenderer()).contains("Would run: claude mcp add"))
+    #expect(wouldRun.text(using: TextRenderer()).contains("Would run: claude mcp add"))
+  }
+
+  @Test("--remove without claude says it can't check and shows claude mcp remove, even if a file lists one")
+  func manualRemove() async throws {
+    let machine = try Machine(claudeInstalled: false)
+    for dryRun in [false, true] {
+      let report = try await machine.setup.configureClaudeCode(
+        scope: .project, SetupOptions(dryRun: dryRun, remove: true))
+      #expect(report.outcome == .manual)
+      #expect(report.headline.contains("whether Claude Code has a reminders server can't be checked"))
+      #expect(report.headline.hasSuffix(dryRun ? "It would print the command to remove it:" : "Run this to remove it:"))
+      #expect(report.commands == [["claude", "mcp", "remove", "--scope", "project", "reminders"]])
+      #expect(report.note == nil)
+      #expect(report.text(using: TextRenderer()).contains("\n  claude mcp remove --scope project reminders\n"))
+    }
+    #expect(machine.calls.isEmpty)
   }
 
   @Test("a failing claude command is reported with its output")

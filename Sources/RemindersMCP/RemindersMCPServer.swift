@@ -11,8 +11,9 @@ public struct RemindersMCPServer: Sendable {
 
   static let instructions = """
     Manage Apple Reminders: lists, reminders, due dates, priorities and recurrence. List and reminder names are \
-    fuzzy matched. Errors come back as {"error": {"code", "message", "suggestion"}}; PERMISSION_DENIED means the \
-    user must run `reminders authorize` in a terminal. Section tools are not implemented yet.
+    fuzzy matched. Errors come back as {"error": {"code", "message", "suggestion"}}; PERMISSION_DENIED means macOS \
+    hasn't given Reminders access to the app running this server; show the user the error's suggestion, which \
+    names that app and says how to grant access. Section tools are not implemented yet.
     """
 
   /// A configured server, not yet started.

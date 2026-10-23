@@ -27,7 +27,10 @@ struct RemindersCommand: AsyncParsableCommand {
     // `reminders --mcp` serves the commands as MCP tools on stdin/stdout instead of running the CLI.
     if arguments.contains("--mcp") {
       do {
-        let server = RemindersMCPServer(service: RemindersService(store: RemindersPlatform.makeStore()))
+        // macOS attributes Reminders access to the client app that started the server, so errors name it.
+        let permissions = PermissionGuidance(host: RemindersPlatform.makeSystemProbe().hostApplication)
+        let server = RemindersMCPServer(
+          service: RemindersService(store: RemindersPlatform.makeStore(), permissions: permissions))
         try await server.run(on: DrainingTransport(StdioTransport()))
       } catch {
         StandardStream(.error).write("reminders --mcp: \(error)\n")

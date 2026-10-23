@@ -129,13 +129,21 @@ struct ToolCallTests {
     await session.stop()
   }
 
-  @Test("permission problems surface as PERMISSION_DENIED with the authorize hint")
+  @Test("permission problems surface as PERMISSION_DENIED naming the client app")
   func permission() async throws {
-    let session = try await MCPSession.start(store: makeStore(access: .denied))
-    let error = try await session.failure("reminders_today")
+    let claude = PermissionGuidance(host: HostApplication(name: "Claude", bundlePath: "/Applications/Claude.app"))
+    let denied = try await MCPSession.start(store: makeStore(access: .denied), permissions: claude)
+    let error = try await denied.failure("reminders_today")
     #expect(error.code == .permissionDenied)
-    #expect(error.suggestion?.contains("reminders authorize") == true)
-    await session.stop()
+    #expect(error.message == "Reminders access not granted (Denied for Claude)")
+    #expect(error.suggestion?.hasPrefix("Enable Claude in System Settings > Privacy & Security > Reminders") == true)
+    await denied.stop()
+
+    let unprompted = InMemoryReminderStore(access: .notDetermined, promptAnswer: .notDetermined)
+    let silent = try await MCPSession.start(store: unprompted, permissions: claude)
+    let refusal = try await silent.failure("reminders_lists")
+    #expect(refusal.message == "Reminders access not granted (macOS didn't show the prompt for Claude)")
+    await silent.stop()
   }
 
   @Test("an unknown tool is a JSON-RPC invalid-params error")

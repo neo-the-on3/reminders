@@ -54,7 +54,7 @@ struct ToolCatalogTests {
     #expect(initialized.serverInfo.version == ProductInfo.version)
     #expect(initialized.capabilities.tools != nil)
     #expect(initialized.capabilities.resources == nil)
-    #expect(initialized.instructions?.contains("reminders authorize") == true)
+    #expect(initialized.instructions?.contains("PERMISSION_DENIED") == true)
     await client.disconnect()
     await server.stop()
   }

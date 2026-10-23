@@ -129,8 +129,9 @@ scripts/mcp-session.sh .build/release/reminders reminders_lists '{}' reminders_t
 ```
 
 **Permission.** macOS assigns Reminders access to the app that launched the server (Claude, Cursor, your
-terminal…), not to `reminders`. If tools report `PERMISSION_DENIED`, allow that app under System Settings ›
-Privacy & Security › Reminders and restart it.
+terminal…), not to `reminders`. If tools report `PERMISSION_DENIED`, the error names that app: allow it under
+System Settings › Privacy & Security › Reminders and restart it. A client that can't show the prompt gets an
+error saying macOS didn't show it.
 
 ### Tools
 

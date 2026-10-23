@@ -29,7 +29,7 @@ struct CreateSection: ConsoleCommand {
   @Argument(help: "Name of the new section") var name: String
 
   func run(in context: CommandContext) async throws {
-    throw RemindersError.notImplemented("create-section")
+    context.console.show(try await context.service.createSection(named: name, inList: list))
   }
 }
 
@@ -46,6 +46,6 @@ struct DeleteSection: ConsoleCommand {
         .invalidArgument, "Section deletion requires --confirm flag",
         suggestion: "Run: \(ProductInfo.name) delete-section \"\(list)\" \"\(name)\" --confirm")
     }
-    throw RemindersError.notImplemented("delete-section")
+    context.console.show(try await context.service.deleteSection(named: name, inList: list))
   }
 }

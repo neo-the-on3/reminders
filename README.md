@@ -4,13 +4,14 @@ A fast, native command-line tool for Apple Reminders, with section support and i
 no Node.js or helper processes, with `--json` output for scripts and an MCP server mode (`reminders --mcp`) for AI
 assistants.
 
-> **Status: lists and reminders work; sections can be read.** `lists`, `list`, `today`, `overdue`, `upcoming`,
+> **Status: lists and reminders work; sections can be read, created and deleted.** `lists`, `list`, `today`, `overdue`, `upcoming`,
 > `search`, `add`, `complete`, `update`, `delete`, `create-list`, `delete-list`, `authorize` and `doctor` work
 > against Apple Reminders through EventKit, from the command line and as MCP tools; `setup-claude`,
 > `setup-claude-code` and `setup-cursor` register the MCP server with those clients. `sections` and
-> `list --section` read sections from the Reminders database (they need Full Disk Access). Changing sections
-> (`create-section`, `delete-section`, `move`, `add --section`) and `demo` arrive in follow-up PRs; until then
-> they fail with a structured `NOT_IMPLEMENTED` error.
+> `list --section` read sections from the Reminders database (they need Full Disk Access); `create-section` and
+> `delete-section` change them through ReminderKit, Reminders' private framework, and are not yet verified
+> against iCloud sync. Moving reminders between sections (`move`, `add --section`) and `demo` arrive in follow-up
+> PRs; until then they fail with a structured `NOT_IMPLEMENTED` error.
 
 ## Requirements
 
@@ -41,7 +42,7 @@ brew install neo-the-on3/tap/reminders
 reminders authorize
 ```
 
-This is an **alpha** pre-release: lists and reminders work, sections don't yet (see the status above). It needs
+This is an **alpha** pre-release: lists and reminders work, sections are partly there (see the status above). It needs
 macOS 26 or later and runs natively on Apple silicon and Intel (a universal binary).
 
 - The binary is **ad-hoc signed, not notarized**. Homebrew doesn't quarantine what it downloads, so macOS runs it

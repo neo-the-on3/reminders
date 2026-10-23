@@ -142,7 +142,7 @@ struct CommandExecutionTests {
     #expect(harness.errors.text.contains("Section deletion requires --confirm flag"))
     #expect(harness.errors.text.contains(#"delete-section "Inbox" "Dairy" --confirm"#))
     #expect(!harness.errors.text.contains("not implemented"))
-    // Past the guard, it isn't implemented yet.
+    // Past the guard it reaches the section store, which this harness doesn't have.
     #expect(try await harness.run(["delete-section", "Inbox", "Dairy", "--confirm", "--json"]) == 1)
     #expect(try await harness.run(["delete-section", "Inbox", "Dairy", "--json"]) == 1)
     #expect(harness.errors.text.components(separatedBy: "NOT_IMPLEMENTED").count == 3)

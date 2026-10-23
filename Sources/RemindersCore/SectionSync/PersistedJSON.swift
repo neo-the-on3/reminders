@@ -454,3 +454,59 @@ private struct JSONTextParser {
     return value
   }
 }
+
+// MARK: - Layout
+
+/// Where an object's members sit in JSON text, as UTF-8 offsets, so an edit can change one member and leave the
+/// rest of the text byte for byte as it was.
+struct JSONObjectLayout: Equatable, Sendable {
+  struct Member: Equatable, Sendable {
+    let key: String
+    /// The key's opening quote.
+    let start: Int
+    /// Just after the key's closing quote.
+    let keyEnd: Int
+    let valueStart: Int
+    /// Just after the value.
+    let end: Int
+  }
+
+  /// The `{`.
+  let open: Int
+  /// The `}`.
+  let close: Int
+  /// In the order they appear, duplicates included.
+  let members: [Member]
+
+  /// The object whose `{` is at `offset` in `bytes`.
+  init(of bytes: [UInt8], at offset: Int) throws(JSONParseError) {
+    var parser = JSONTextParser(bytes: bytes, position: offset)
+    guard offset < bytes.count, bytes[offset] == UInt8(ascii: "{") else { throw parser.error("Expected object") }
+    parser.position += 1
+    var members: [Member] = []
+    parser.skipWhitespace()
+    if parser.isAtEnd || bytes[parser.position] != UInt8(ascii: "}") {
+      while true {
+        parser.skipWhitespace()
+        let start = parser.position
+        guard !parser.isAtEnd, bytes[start] == UInt8(ascii: "\"") else { throw parser.error("Expected key") }
+        let key = try parser.parseString()
+        let keyEnd = parser.position
+        parser.skipWhitespace()
+        try parser.expect(":")
+        parser.skipWhitespace()
+        let valueStart = parser.position
+        _ = try parser.parseValue(depth: 1)
+        members.append(Member(key: key, start: start, keyEnd: keyEnd, valueStart: valueStart, end: parser.position))
+        parser.skipWhitespace()
+        guard !parser.isAtEnd else { throw parser.error("Unterminated object") }
+        guard bytes[parser.position] == UInt8(ascii: ",") else { break }
+        parser.position += 1
+      }
+      guard bytes[parser.position] == UInt8(ascii: "}") else { throw parser.error("Expected }") }
+    }
+    self.open = offset
+    self.close = parser.position
+    self.members = members
+  }
+}

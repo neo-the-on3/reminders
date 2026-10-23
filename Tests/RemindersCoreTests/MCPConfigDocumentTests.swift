@@ -53,7 +53,7 @@ struct MCPConfigDocumentTests {
     }
   }
 
-  @Test("other servers, other keys, their order and the indentation are kept")
+  @Test("other servers, other keys, their order and their layout are kept byte for byte")
   func merge() throws {
     let edit = try MCPConfigDocument(existing, path: path).adding(entry, force: false)
     #expect(edit.outcome == .added)
@@ -64,9 +64,7 @@ struct MCPConfigDocumentTests {
                 "filesystem": {
                     "command": "npx",
                     "args": ["-y", "@modelcontextprotocol/server-filesystem", "/Users/me/Desktop"],
-                    "env": {
-                        "DEBUG": "1"
-                    }
+                    "env": {"DEBUG": "1"}
                 },
                 "reminders": {
                     "command": "/opt/homebrew/opt/reminders/bin/reminders",
@@ -127,6 +125,62 @@ struct MCPConfigDocumentTests {
     #expect(removed.text?.contains("globalShortcut") == true)
     #expect(try MCPConfigDocument(existing, path: path).removing(entry, force: false).outcome == .absent)
     #expect(try MCPConfigDocument(nil, path: path).removing(entry, force: false).outcome == .absent)
+  }
+
+  @Test(
+    "adding then removing gives the original text back",
+    arguments: [
+      existing,
+      #"{"mcpServers":{"filesystem":{"command":"npx","args":["-y"]}},"theme":"dark"}"#,
+      #"{ "mcpServers": { "a": { "command": "a" } } }"# + "\n",
+      "{\r\n  \"mcpServers\": {\r\n    \"a\": {\"command\": \"a\"}\r\n  }\r\n}\r\n",
+      "{\n  \"mcpServers\": {},\n  \"theme\": \"dark\"\n}",
+    ])
+  func roundTrip(original: String) throws {
+    let added = try #require(try MCPConfigDocument(original, path: path).adding(entry, force: false).text)
+    #expect(try MCPConfigDocument(added, path: path).existingEntry != nil)
+    #expect(try MCPConfigDocument(added, path: path).removing(entry, force: false).text == original)
+  }
+
+  @Test("a new entry follows its neighbours' layout: one-line objects stay on one line")
+  func compact() throws {
+    let oneLine = #"{"mcpServers": {"a": {"command": "a"}}}"#
+    #expect(
+      try MCPConfigDocument(oneLine, path: path).adding(entry, force: false).text
+        == #"{"mcpServers": {"a": {"command": "a"},"reminders": {"command":"\#(entry.command)","args":["--mcp"]}}}"#)
+    let crlf = "{\r\n  \"mcpServers\": {\r\n    \"a\": 1\r\n  }\r\n}\r\n"
+    let added = try #require(try MCPConfigDocument(crlf, path: path).adding(entry, force: false).text)
+    #expect(added.contains("\"a\": 1,\r\n    \"reminders\": {\r\n      \"command\""))
+    #expect(!added.replacing("\r\n", with: "").contains("\n"))
+  }
+
+  @Test("removing or replacing an existing entry touches only its own text")
+  func inPlace() throws {
+    let first = """
+      {
+        "mcpServers": {
+          "reminders": {"command": "/old/reminders", "args": ["--mcp"]},
+          "b": {"command": "b"}
+        }
+      }
+      """
+    #expect(
+      try MCPConfigDocument(first, path: path).removing(entry, force: true).text
+        == "{\n  \"mcpServers\": {\n    \"b\": {\"command\": \"b\"}\n  }\n}")
+    #expect(
+      try MCPConfigDocument(first, path: path).adding(entry, force: true).text
+        == first.replacing(
+          #"{"command": "/old/reminders", "args": ["--mcp"]}"#,
+          with: #"{"command":"\#(entry.command)","args":["--mcp"]}"#))
+    let only = #"{"mcpServers": {"reminders": {"command": "/old/reminders"}}, "x": 1}"#
+    #expect(try MCPConfigDocument(only, path: path).removing(entry, force: true).text == #"{"mcpServers": {}, "x": 1}"#)
+  }
+
+  @Test("a duplicated reminders key is rewritten whole rather than half-edited")
+  func duplicateKey() throws {
+    let duplicated = #"{"mcpServers": {"reminders": {"command": "x"}, "reminders": {"command": "y"}}}"#
+    let removed = try #require(try MCPConfigDocument(duplicated, path: path).removing(entry, force: true).text)
+    #expect(!removed.contains("reminders"))
   }
 
   @Test("invalid JSON is refused with the line and column; so are misshapen files")

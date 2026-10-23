@@ -1,0 +1,117 @@
+name: Release
+
+# A `v*` tag builds, verifies and publishes a GitHub Release. Running it by hand (workflow_dispatch), or a pull
+# request that changes how releases are built, is a dry run: it builds, verifies and uploads the package as a
+# workflow artifact, but publishes nothing.
+on:
+  push:
+    tags: ["v*"]
+  pull_request:
+    paths:
+      - .github/workflows/release.yml
+      - scripts/build-release.sh
+      - Package.swift
+      - Support/Info.plist
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to stamp into the dry-run build (SemVer, no leading v)"
+        default: "0.0.0-dryrun"
+        required: true
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build, verify and publish
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v7
+
+      # The Swift toolchain pinned in mise.toml, as in CI
+      - uses: jdx/mise-action@v5
+
+      - name: Version
+        id: version
+        env:
+          EVENT: ${{ github.event_name }}
+          TAG: ${{ github.ref_name }}
+          INPUT: ${{ inputs.version }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          case $EVENT in
+            push) version=${TAG#v} publish=true ;;
+            pull_request) version=0.0.0-pr.$PR publish=false ;;
+            *) version=$INPUT publish=false ;;
+          esac
+          if [[ ! $version =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::$version is not a SemVer version"
+            exit 1
+          fi
+          # A pre-release suffix (1.0.0-alpha.1) makes a GitHub pre-release
+          prerelease=false
+          [[ $version == *-* ]] && prerelease=true
+          {
+            echo "version=$version"
+            echo "publish=$publish"
+            echo "prerelease=$prerelease"
+            echo "package=reminders-$version-macos-universal.tar.gz"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build (universal, embedded Info.plist, ad-hoc signed)
+        run: scripts/build-release.sh --universal --version "${{ steps.version.outputs.version }}" dist/reminders
+
+      - name: Verify the binary
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          binary=dist/reminders
+          lipo -info "$binary" | tee lipo.txt
+          grep -q arm64 lipo.txt
+          grep -q x86_64 lipo.txt
+          codesign -dv --verbose=2 "$binary" 2>&1 | tee codesign.txt
+          grep -q "Identifier=io.github.neo-the-on3.reminders" codesign.txt
+          grep -q "Signature=adhoc" codesign.txt
+          launchctl plist __TEXT,__info_plist "$binary" | tee plist.txt
+          grep -q NSRemindersFullAccessUsageDescription plist.txt
+          grep -q "$VERSION" plist.txt
+          test "$("$binary" --version)" = "$VERSION"
+          "$binary" --help > /dev/null
+          # Both slices run here: x86_64 through Rosetta, when the runner has it
+          if arch -x86_64 /usr/bin/true 2> /dev/null; then
+            test "$(arch -x86_64 "$binary" --version)" = "$VERSION"
+          fi
+
+      - name: Package
+        env:
+          PACKAGE: ${{ steps.version.outputs.package }}
+        run: |
+          cp LICENSE README.md dist/
+          tar -C dist -czf "$PACKAGE" reminders LICENSE README.md
+          shasum -a 256 "$PACKAGE" | tee "$PACKAGE.sha256"
+          tar -tzf "$PACKAGE"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.version.outputs.package }}
+          path: |
+            ${{ steps.version.outputs.package }}
+            ${{ steps.version.outputs.package }}.sha256
+          if-no-files-found: error
+
+      - name: Publish the GitHub Release
+        if: steps.version.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          PACKAGE: ${{ steps.version.outputs.package }}
+          PRERELEASE: ${{ steps.version.outputs.prerelease }}
+        run: |
+          flags=(--verify-tag --generate-notes --title "reminders $TAG")
+          [[ $PRERELEASE == true ]] && flags+=(--prerelease)
+          gh release create "$TAG" "$PACKAGE" "$PACKAGE.sha256" "${flags[@]}"

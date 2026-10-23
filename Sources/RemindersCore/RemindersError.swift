@@ -16,6 +16,8 @@ public struct RemindersError: Error, Hashable, Sendable, Codable, CustomStringCo
     case checksFailed = "CHECKS_FAILED"
     /// The Reminders store refused an operation (a failed save or removal).
     case storeFailure = "STORE_FAILURE"
+    /// Reminders changed the data while it was being edited, again after retrying.
+    case storeConflict = "STORE_CONFLICT"
     /// Apple Reminders isn't available on this platform (any OS other than macOS).
     case unsupportedPlatform = "UNSUPPORTED_PLATFORM"
     /// A client's configuration file can't be read as JSON, or isn't shaped as expected; it was left alone.
@@ -43,6 +45,10 @@ public struct RemindersError: Error, Hashable, Sendable, Codable, CustomStringCo
 }
 
 extension RemindersError {
+  /// Section memberships changed between reading and writing them.
+  public static let membershipConflict = RemindersError(
+    .storeConflict, "Reminders changed this list's sections while they were being edited", suggestion: "Try again")
+
   /// A command or option that exists in the CLI but isn't implemented yet.
   public static func notImplemented(_ feature: String) -> RemindersError {
     RemindersError(

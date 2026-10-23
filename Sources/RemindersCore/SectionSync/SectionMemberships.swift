@@ -54,6 +54,11 @@ public struct SectionMemberships: Sendable, Equatable {
     entries.last { $0.reminderID == reminderID }?.sectionID
   }
 
+  /// Each reminder's section; when a reminder is listed more than once, its last entry counts.
+  public var sectionsByReminder: [String: String] {
+    Dictionary(entries.map { ($0.reminderID, $0.sectionID) }, uniquingKeysWith: { _, last in last })
+  }
+
   /// Puts a reminder in a section, taking it out of any other. Returns false when it was already there.
   /// - Parameters: reminderID, sectionID: dashed upper-case UUIDs.
   @discardableResult
@@ -81,6 +86,15 @@ public struct SectionMemberships: Sendable, Equatable {
     return true
   }
 
+  /// Takes every reminder out of `sectionID`, as when the section is deleted. Returns false when none was in it.
+  @discardableResult
+  public mutating func removeAll(inSection sectionID: String) -> Bool {
+    let remaining = rawEntries.filter { $0["groupID"]?.stringValue != sectionID }
+    guard remaining.count != rawEntries.count else { return false }
+    rawEntries = remaining
+    return true
+  }
+
   /// The JSON to store: compact, in the original key order.
   public var storedData: String { document.serialized }
 
@@ -89,6 +103,13 @@ public struct SectionMemberships: Sendable, Equatable {
 
   static func checksum(of text: String) -> String {
     SHA512Digest.hex(of: text.utf8)
+  }
+
+  /// Whether `stored` has a checksum that doesn't match its data. Such data is never edited: writing a fresh
+  /// checksum over it would hide whatever went wrong.
+  public static func isCorrupt(_ stored: StoredMemberships) -> Bool {
+    guard let data = stored.data, let checksum = stored.checksum, !checksum.isEmpty else { return false }
+    return checksum.lowercased() != Self.checksum(of: data)
   }
 }
 

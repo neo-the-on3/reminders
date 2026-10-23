@@ -255,7 +255,9 @@ Five targets with one-way dependencies (`RemindersCLI` → `RemindersMCP`, `Remi
     `ResolutionTokenMap` (the vector clocks that make iCloud push a change). They edit stored JSON in place, keeping
     unknown fields, key order and number formatting, because Reminders checksums the exact bytes.
   - `Store/`: the `ReminderStore` protocol (`Sendable`, async, typed throws), which is everything the commands
-    need from a reminders database, plus `InMemoryReminderStore`, an actor used by the tests.
+    need from a reminders database, plus `InMemoryReminderStore`, an actor used by the tests. Sections have their
+    own `SectionStore`, because EventKit has none: it reads and writes a list's sections and its raw stored
+    memberships, and replaces them only if they haven't changed since they were read (`STORE_CONFLICT` otherwise).
   - `Service/`: `RemindersService`, the commands as operations on any store: access checks, list resolution,
     counts, the today/overdue/upcoming/search filters and the changes. It returns `ConsoleRepresentable` values.
   - `Diagnostics/`: `doctor`'s checks and `authorize`'s steps, against a `SystemProbe` (macOS version, embedded

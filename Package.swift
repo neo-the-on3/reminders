@@ -27,6 +27,7 @@ let package = Package(
       name: "RemindersCLI",
       dependencies: [
         "RemindersCore",
+        "RemindersApple",
         .product(name: "ArgumentParser", package: "swift-argument-parser"),
       ]
     ),

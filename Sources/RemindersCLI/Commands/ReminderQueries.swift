@@ -5,8 +5,8 @@ struct Today: ConsoleCommand {
   static let configuration = CommandConfiguration(abstract: "Show reminders due today")
   @OptionGroup var globals: GlobalOptions
 
-  func run(on console: Console) async throws {
-    throw RemindersError.notImplemented("today")
+  func run(in context: CommandContext) async throws {
+    context.console.show(try await context.service.dueToday())
   }
 }
 
@@ -15,8 +15,8 @@ struct Upcoming: ConsoleCommand {
   @OptionGroup var globals: GlobalOptions
   @Option(help: "Number of days to look ahead") var days = 7
 
-  func run(on console: Console) async throws {
-    throw RemindersError.notImplemented("upcoming")
+  func run(in context: CommandContext) async throws {
+    context.console.show(try await context.service.upcoming(days: days))
   }
 }
 
@@ -24,8 +24,8 @@ struct Overdue: ConsoleCommand {
   static let configuration = CommandConfiguration(abstract: "Show overdue reminders")
   @OptionGroup var globals: GlobalOptions
 
-  func run(on console: Console) async throws {
-    throw RemindersError.notImplemented("overdue")
+  func run(in context: CommandContext) async throws {
+    context.console.show(try await context.service.overdue())
   }
 }
 
@@ -36,8 +36,9 @@ struct ListContents: ConsoleCommand {
   @Option(help: "Filter by section") var section: String?
   @Flag(help: "Include completed reminders") var includeCompleted = false
 
-  func run(on console: Console) async throws {
-    throw RemindersError.notImplemented("list")
+  func run(in context: CommandContext) async throws {
+    if section != nil { throw RemindersError.notImplemented("Filtering by section (--section)") }
+    context.console.show(try await context.service.contents(ofList: name, includeCompleted: includeCompleted))
   }
 }
 
@@ -46,8 +47,8 @@ struct Lists: ConsoleCommand {
     commandName: "lists", abstract: "List all reminder lists", aliases: ["ls"])
   @OptionGroup var globals: GlobalOptions
 
-  func run(on console: Console) async throws {
-    throw RemindersError.notImplemented("lists")
+  func run(in context: CommandContext) async throws {
+    context.console.show(try await context.service.listOverview())
   }
 }
 
@@ -56,7 +57,7 @@ struct Search: ConsoleCommand {
   @OptionGroup var globals: GlobalOptions
   @Argument(help: "Text to find in titles and notes") var query: String
 
-  func run(on console: Console) async throws {
-    throw RemindersError.notImplemented("search")
+  func run(in context: CommandContext) async throws {
+    context.console.show(try await context.service.search(query))
   }
 }

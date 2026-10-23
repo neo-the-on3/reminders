@@ -47,14 +47,14 @@ jobs:
           set +e
           swift run reminders completions powershell
           test $? -eq 64 || exit 1
-          # Commands that aren't available yet fail with a structured error and exit 1
+          # Without Apple Reminders, commands fail with a structured error and exit 1
           swift run reminders --json lists 2> err.json
           status=$?
           set -e
           cat err.json
           test "$status" -eq 1
           grep -q '"success" : false' err.json
-          grep -q '"code" : "NOT_IMPLEMENTED"' err.json
+          grep -q '"code" : "UNSUPPORTED_PLATFORM"' err.json
 
   macos:
     name: macOS (release build, test)

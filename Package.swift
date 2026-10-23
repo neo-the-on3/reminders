@@ -39,6 +39,8 @@ let package = Package(
       dependencies: [
         "RemindersCore",
         "RemindersApple",
+        "RemindersMCP",
+        .product(name: "MCP", package: "swift-sdk"),
         .product(name: "ArgumentParser", package: "swift-argument-parser"),
       ],
       linkerSettings: [

@@ -1,6 +1,9 @@
 import ArgumentParser
 import Foundation
+import MCP
+import RemindersApple
 import RemindersCore
+import RemindersMCP
 
 @main
 struct RemindersCommand: AsyncParsableCommand {
@@ -21,10 +24,16 @@ struct RemindersCommand: AsyncParsableCommand {
 
   static func main() async {
     let arguments = Array(CommandLine.arguments.dropFirst())
-    // `reminders --mcp` will run the MCP server instead of the CLI.
+    // `reminders --mcp` serves the commands as MCP tools on stdin/stdout instead of running the CLI.
     if arguments.contains("--mcp") {
-      Console.standard(format: .json, verbose: false).report(.notImplemented("MCP server mode (--mcp)"))
-      Foundation.exit(ExitCode.failure.rawValue)
+      do {
+        let server = RemindersMCPServer(service: RemindersService(store: RemindersPlatform.makeStore()))
+        try await server.run(on: DrainingTransport(StdioTransport()))
+      } catch {
+        StandardStream(.error).write("reminders --mcp: \(error)\n")
+        Foundation.exit(ExitCode.failure.rawValue)
+      }
+      return
     }
     do {
       var command = try parseAsRoot(arguments)

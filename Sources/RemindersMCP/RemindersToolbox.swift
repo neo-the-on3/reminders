@@ -66,7 +66,11 @@ public struct RemindersToolbox: Sendable {
       return try await service.update(reference(arguments, for: tool), edit)
     case .sections:
       return SectionsResult(sections: try await service.sections(ofList: arguments.string("list")).sections)
-    case .createSection, .deleteSection, .move:
+    case .createSection:
+      return try await service.createSection(named: arguments.string("name"), inList: arguments.string("list"))
+    case .deleteSection:
+      return try await service.deleteSection(named: arguments.string("name"), inList: arguments.string("list"))
+    case .move:
       throw RemindersError.notImplemented("Sections (\(tool.rawValue))")
     case .today:
       return RemindersResult(try await service.dueToday())

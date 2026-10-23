@@ -30,7 +30,7 @@ public enum ReminderTool: String, CaseIterable, Sendable {
   /// Tools that change sections exist so clients see the whole tool set, but report NOT_IMPLEMENTED for now.
   public var isUnimplemented: Bool {
     switch self {
-    case .createSection, .deleteSection, .move: true
+    case .move: true
     default: false
     }
   }
@@ -70,8 +70,8 @@ public enum ReminderTool: String, CaseIterable, Sendable {
     case .update:
       "Update a reminder's title, due date, priority or notes; find it by title (fuzzy matched) or ID prefix"
     case .sections: "List the sections in a reminder list, in Reminders' order"
-    case .createSection: "Create a section in a list (not implemented yet)"
-    case .deleteSection: "Delete a section from a list (not implemented yet)"
+    case .createSection: "Create a section in a list; an existing section with exactly that name is reused"
+    case .deleteSection: "Delete a section from a list; its reminders stay in the list"
     case .move: "Move a reminder to a different section (not implemented yet)"
     case .today: "Show incomplete reminders due today"
     case .overdue: "Show incomplete reminders due before today"
@@ -157,12 +157,12 @@ public enum ReminderTool: String, CaseIterable, Sendable {
     case .list, .today, .overdue, .upcoming, .search:
       JSONSchema.record(
         ["reminders": JSONSchema.array(of: Self.reminderSchema, "Matching reminders")], required: ["reminders"])
-    case .createList, .deleteList, .add, .complete, .delete, .update:
+    case .createList, .deleteList, .add, .complete, .delete, .update, .createSection, .deleteSection:
       Self.confirmationSchema
     case .sections:
       JSONSchema.record(
         ["sections": JSONSchema.array(of: Self.sectionSchema, "Sections, in Reminders' order")], required: ["sections"])
-    case .createSection, .deleteSection, .move:
+    case .move:
       nil
     }
   }

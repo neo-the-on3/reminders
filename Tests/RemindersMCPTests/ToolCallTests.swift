@@ -143,7 +143,28 @@ struct ToolCallTests {
     await session.stop()
   }
 
-  @Test("tools that change sections, and sections without a section store, report NOT_IMPLEMENTED")
+  @Test("sections are created, reused by exact name, and deleted")
+  func sectionChanges() async throws {
+    let sectionStore = makeSectionStore()
+    let session = try await MCPSession.start(sections: sectionStore)
+    let created = try await session.success("reminders_create_section", ["list": "work", "name": "Q4"])
+    #expect(created["message"]?.stringValue == #"Created section "Q4" in "Work""#)
+    let again = try await session.success("reminders_create_section", ["list": "Work", "name": "Q4"])
+    #expect(again["id"] == created["id"])
+    let deleted = try await session.success("reminders_delete_section", ["list": "Work", "name": "writ"])
+    #expect(deleted["message"]?.stringValue == #"Deleted section "Writing" from "Work""#)
+    let sections = try await session.success("reminders_sections", ["list": "Work"])
+    #expect(
+      sections["sections"]?.arrayValue?.compactMap { $0.objectValue?["displayName"]?.stringValue } == [
+        "Planning", "Q4",
+      ])
+    #expect(
+      try await session.failure("reminders_delete_section", ["list": "Work", "name": "Nope"]).code == .sectionNotFound)
+    #expect(await session.store.allReminders.count == 5)  // reminders of a deleted section stay in the list
+    await session.stop()
+  }
+
+  @Test("without a section store, section tools report NOT_IMPLEMENTED")
   func sections() async throws {
     let session = try await MCPSession.start()
     let calls: [(String, [String: Value])] = [

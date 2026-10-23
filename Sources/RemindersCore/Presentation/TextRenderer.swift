@@ -53,7 +53,7 @@ public struct TextRenderer: Sendable {
     let sorted = layout.sortByDueDate ? reminders.sortedByDueDate() : reminders
     var text = ""
     if let heading {
-      let overdue = sorted.count { $0.dueDate.map { clock.days(until: $0) < 0 } ?? false }
+      let overdue = sorted.count(where: clock.isOverdue)
       var summary = ["\(sorted.count) reminder\(sorted.count == 1 ? "" : "s")"]
       if overdue > 0 { summary.append(style("\(overdue) overdue", .red)) }
       text += style("\n\(heading)", .bold) + style(" (\(summary.joined(separator: ", ")))\n", .dim)

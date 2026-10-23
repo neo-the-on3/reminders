@@ -14,6 +14,13 @@ public struct DayClock: Sendable {
 
   public var today: CalendarDay { CalendarDay(now, in: calendar) }
 
+  /// Whether `reminder` is overdue: incomplete and due on a day before today. Every overdue count and the
+  /// `overdue` command use this one definition, so a reminder due today is never overdue.
+  public func isOverdue(_ reminder: Reminder) -> Bool {
+    guard !reminder.isCompleted, let due = reminder.dueDate else { return false }
+    return due < today
+  }
+
   /// Whole days from today to `day` (negative when it is in the past).
   public func days(until day: CalendarDay) -> Int {
     guard let start = calendar.date(from: today.dateComponents), let end = day.startDate(in: calendar) else { return 0 }

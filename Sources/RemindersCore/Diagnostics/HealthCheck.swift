@@ -26,6 +26,7 @@ public struct HealthReport: ConsoleRepresentable {
   }
 
   public var failureCount: Int { checks.count { $0.status == .fail } }
+  public var warningCount: Int { checks.count { $0.status == .warn } }
   public var passed: Bool { failureCount == 0 }
 
   /// `CHECKS_FAILED` naming the failing checks; nil when every check passed.
@@ -38,6 +39,14 @@ public struct HealthReport: ConsoleRepresentable {
   }
 
   public func encode(to encoder: any Encoder) throws { try checks.encode(to: encoder) }
+
+  /// "All checks passed.", "All required checks passed (1 warning).", or "1 issue(s) found (1 warning)."
+  private func summary(_ style: TerminalStyle) -> String {
+    let warnings = warningCount == 0 ? "" : " (\(warningCount) warning\(warningCount == 1 ? "" : "s"))"
+    if !passed { return style("\(failureCount) issue(s) found\(warnings).", .red) }
+    return warningCount == 0
+      ? style("All checks passed.", .green) : style("All required checks passed\(warnings).", .yellow)
+  }
 
   public func text(using renderer: TextRenderer) -> String {
     let style = renderer.style
@@ -52,7 +61,7 @@ public struct HealthReport: ConsoleRepresentable {
       text += "\(icon) \(style(check.name, .bold)): \(check.message)\n"
       if let detail = check.detail { text += style("  \(detail)\n", .dim) }
     }
-    text += passed ? style("\nAll checks passed.\n", .green) : style("\n\(failureCount) issue(s) found.\n", .red)
+    text += "\n" + summary(style) + "\n"
     return text
   }
 }

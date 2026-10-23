@@ -1,0 +1,62 @@
+# SwiftLint (realm/SwiftLint) configuration. Version pinned in mise.toml; CI runs `swiftlint lint --strict`.
+# Layout is owned by Apple's swift-format (.swift-format); style rules that would fight it are disabled.
+included:
+  - Package.swift
+  - Sources
+  - Tests
+  - scripts
+excluded:
+  - .build
+  # Generated from remi / chrono-node by scripts/*: regenerate rather than edit
+  - Tests/RemiCoreTests/ChronoFixtures.swift
+  - Tests/RemiCoreTests/OutputFixtures.swift
+
+disabled_rules:
+  # --- Conflict with swift-format's layout (2-space indent, 120 columns, its own wrapping) ---
+  - opening_brace  # swift-format puts `{` on its own line after multi-line conditions
+  - trailing_comma  # swift-format adds trailing commas to multi-line collections
+  - comma  # swift-format owns spacing around commas
+  - colon  # swift-format owns spacing around colons
+  - closure_parameter_position
+  - statement_position
+  - vertical_parameter_alignment
+  - vertical_parameter_alignment_on_call
+  - multiline_arguments
+  - multiline_parameters
+  - vertical_whitespace
+  - leading_whitespace
+  - trailing_whitespace
+  - function_name_whitespace
+  - return_arrow_whitespace
+  - line_length  # swift-format enforces lineLength (120); string literals it cannot wrap are allowed
+  # --- Deliberate for a faithful port ---
+  - identifier_name  # remi's short names (s, q, h, d) kept for side-by-side review with the TypeScript
+
+opt_in_rules:
+  - array_init
+  - contains_over_filter_count
+  - contains_over_first_not_nil
+  - empty_count
+  - empty_string
+  - first_where
+  - last_where
+  - redundant_nil_coalescing
+  - sorted_first_last
+  - toggle_bool
+  - fatal_error_message
+
+file_length:
+  warning: 600
+  error: 900
+type_body_length:
+  warning: 400
+  error: 600
+function_body_length:
+  warning: 80
+  error: 120
+cyclomatic_complexity:
+  warning: 20
+  error: 30
+large_tuple:
+  warning: 3
+  error: 4

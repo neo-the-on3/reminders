@@ -1,0 +1,88 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    name: Linux (build, lint, test)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      # Installs the Swift toolchain pinned in mise.toml
+      - uses: jdx/mise-action@v5
+
+      - uses: actions/cache@v6
+        with:
+          path: .build
+          key: spm-linux-${{ hashFiles('mise.toml', 'Package.swift', 'Package.resolved') }}
+          restore-keys: spm-linux-
+
+      - run: swift --version && swiftlint version
+      - name: Lint (swift-format + SwiftLint, strict)
+        run: mise run lint
+      - name: Build
+        run: swift build
+      - name: Test
+        run: swift test
+      - name: CLI smoke test
+        run: |
+          swift run remi --version
+          swift run remi --help
+          swift run remi completions bash
+
+  macos:
+    name: macOS (release build, test)
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v7
+
+      # Installs the Swift toolchain pinned in mise.toml (swift.org .pkg); the SDK comes from the runner's Xcode.
+      - uses: jdx/mise-action@v5
+
+      - uses: actions/cache@v6
+        with:
+          path: .build
+          key: spm-macos-${{ hashFiles('mise.toml', 'Package.swift', 'Package.resolved') }}
+          restore-keys: spm-macos-
+
+      - run: |
+          sw_vers
+          xcode-select -p
+          which swift
+          swift --version
+          swiftlint version
+      - name: Lint (swift-format + SwiftLint, strict)
+        run: mise run lint
+      - name: Build (release)
+        run: swift build -c release --product remi
+      - name: Test
+        run: swift test
+      - name: CLI smoke test
+        run: |
+          .build/release/remi --version
+          .build/release/remi --help
+          # Apple-backed commands aren't ported yet: expect a structured JSON error and exit code 1
+          set +e
+          .build/release/remi --json lists 2> err.json
+          status=$?
+          set -e
+          cat err.json
+          test "$status" -eq 1
+          grep -q '"success": false' err.json
+      - uses: actions/upload-artifact@v7
+        with:
+          name: remi-macos
+          path: .build/release/remi
+          if-no-files-found: error

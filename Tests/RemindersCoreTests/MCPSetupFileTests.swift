@@ -5,11 +5,13 @@ import Testing
 
 /// A temporary directory, removed when the value goes away.
 final class TemporaryDirectory {
+  /// Physical, as the setup commands report paths (on macOS the temporary folder is behind `/var` → `/private/var`).
   let path: String
 
   init() throws {
-    path = FileManager.default.temporaryDirectory.appending(path: "reminders-setup-\(UUID().uuidString)").path
-    try FileManager.default.createDirectory(atPath: path, withIntermediateDirectories: true)
+    let created = FileManager.default.temporaryDirectory.appending(path: "reminders-setup-\(UUID().uuidString)").path
+    try FileManager.default.createDirectory(atPath: created, withIntermediateDirectories: true)
+    path = PhysicalPath.of(created)
   }
 
   deinit {
@@ -118,5 +120,36 @@ struct ConfigFileTests {
     let path = directory.file("mcp.json")
     FileManager.default.createFile(atPath: path, contents: Data([0xFF, 0xFE, 0x00]))
     #expect(throws: RemindersError.self) { try ConfigFile.read(path) }
+  }
+}
+
+@Suite("MCP setup: one form for every path")
+struct PhysicalPathTests {
+  @Test("symlinks, . and .. are resolved, and components that don't exist yet are kept")
+  func resolving() throws {
+    let directory = try TemporaryDirectory()
+    try FileManager.default.createDirectory(atPath: directory.file("real/sub"), withIntermediateDirectories: true)
+    try FileManager.default.createSymbolicLink(atPath: directory.file("link"), withDestinationPath: "real")
+    #expect(PhysicalPath.of(directory.file("link/sub")) == directory.file("real/sub"))
+    #expect(PhysicalPath.of(directory.file("link/./sub/../new/file.json")) == directory.file("real/new/file.json"))
+    #expect(PhysicalPath.of("/") == "/")
+    #expect(PhysicalPath.of("/no-such-root-folder/x") == "/no-such-root-folder/x")
+  }
+
+  @Test("a config reached through a symlink is reported, backed up and written at its physical path")
+  func throughSymlink() throws {
+    let directory = try TemporaryDirectory()
+    try FileManager.default.createDirectory(atPath: directory.file("real"), withIntermediateDirectories: true)
+    try FileManager.default.createSymbolicLink(atPath: directory.file("link"), withDestinationPath: "real")
+    try ConfigFile.write(#"{"mcpServers": {}}"#, to: directory.file("real/mcp.json"))
+    let setup = MCPSetup(
+      environment: SetupEnvironment(
+        homeDirectory: directory.path, currentDirectory: directory.path, binaryPath: "/usr/local/bin/reminders",
+        searchPath: nil, runner: ProcessRunner(), isExecutable: { _ in false }))
+    let report = try setup.configure(.cursor, at: directory.file("link/mcp.json"), SetupOptions())
+    #expect(report.configPath == directory.file("real/mcp.json"))
+    #expect(report.backupPath?.hasPrefix(directory.file("real/mcp.json.bak-")) == true)
+    let text = report.text(using: TextRenderer())
+    #expect(!text.contains(directory.file("link")))
   }
 }

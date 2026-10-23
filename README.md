@@ -152,6 +152,8 @@ reminders setup-cursor                    # Cursor, every project (--project <di
   neighbours, using the file's indentation. The file and its folder are created when missing. Before a change the
   original is copied to `<file>.bak-<YYYYMMDD-HHMMSS>`, and the new file is written atomically. A file that isn't
   valid JSON is left alone and reported with its line and column (`CONFIG_INVALID`).
+- **Paths** are reported the way the file system resolves them, symlinks included, so the config, its backup and
+  the server's command all print in one form (on macOS `/tmp/x.json` shows as `/private/tmp/x.json`).
 - **Claude Code** owns its config, so `setup-claude-code` runs
   `claude mcp add --transport stdio --scope user reminders -- <binary> --mcp`. Without `claude` on `PATH` it prints
   that command instead.

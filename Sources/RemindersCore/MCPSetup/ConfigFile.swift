@@ -8,7 +8,7 @@ import Foundation
 public enum ConfigFile {
   /// The file's text, or nil when it doesn't exist.
   public static func read(_ path: String) throws(RemindersError) -> String? {
-    let url = URL(filePath: path).resolvingSymlinksInPath()
+    let url = URL(filePath: PhysicalPath.of(path))
     guard FileManager.default.fileExists(atPath: url.path) else { return nil }
     guard let data = FileManager.default.contents(atPath: url.path) else {
       throw RemindersError(.setupFailed, "Cannot read \(path)", suggestion: "Check the file's permissions")
@@ -24,7 +24,7 @@ public enum ConfigFile {
   /// path, or nil when there was no file to back up.
   @discardableResult
   public static func write(_ text: String, to path: String, now: Date = .now) throws(RemindersError) -> String? {
-    let url = URL(filePath: path).resolvingSymlinksInPath()
+    let url = URL(filePath: PhysicalPath.of(path))
     let manager = FileManager.default
     do {
       try manager.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)

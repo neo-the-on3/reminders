@@ -19,8 +19,9 @@ private struct FakeHome {
   let environment: SetupEnvironment
 
   init() throws {
-    path = FileManager.default.temporaryDirectory.appending(path: "reminders-cli-\(UUID().uuidString)").path
-    try FileManager.default.createDirectory(atPath: path, withIntermediateDirectories: true)
+    let created = FileManager.default.temporaryDirectory.appending(path: "reminders-cli-\(UUID().uuidString)").path
+    try FileManager.default.createDirectory(atPath: created, withIntermediateDirectories: true)
+    path = PhysicalPath.of(created)
     environment = SetupEnvironment(
       homeDirectory: path, currentDirectory: path, binaryPath: "/opt/homebrew/opt/reminders/bin/reminders",
       searchPath: nil, runner: NoRunner(), isExecutable: { _ in false })
@@ -117,5 +118,19 @@ struct SetupCommandTests {
     #expect(status == 0)
     #expect(output.contains("claude mcp add --transport stdio --scope project reminders -- "))
     #expect(throws: (any Error).self) { try RemindersCommand.parseAsRoot(["setup-claude-code", "--scope", "team"]) }
+  }
+
+  @Test("reports name the config file and its backup by one physical path")
+  func physicalPaths() async throws {
+    let home = try FakeHome()
+    defer { home.remove() }
+    try FileManager.default.createDirectory(atPath: "\(home.path)/real", withIntermediateDirectories: true)
+    try FileManager.default.createSymbolicLink(atPath: "\(home.path)/link", withDestinationPath: "real")
+    try ConfigFile.write("{}", to: "\(home.path)/real/mcp.json")
+    let (_, output, _) = try await run(["setup-cursor", "--config", "\(home.path)/link/mcp.json"], in: home)
+    #expect(output.contains("Config: \(home.path)/real/mcp.json\n"))
+    #expect(output.contains("Backup: \(home.path)/real/mcp.json.bak-"))
+    #expect(!output.contains("/link/"))
+    #expect(output.contains("name Cursor"))
   }
 }

@@ -101,14 +101,21 @@ public struct Console: Sendable {
   }
 
   static func encode(_ value: some Encodable) -> String {
-    let encoder = JSONEncoder()
-    encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
     do {
-      return (String(bytes: try encoder.encode(value), encoding: .utf8) ?? "") + "\n"
+      return (String(bytes: try JSONEncoder.reminders().encode(value), encoding: .utf8) ?? "") + "\n"
     } catch {
       return #"{"success": false, "error": {"code": "UNKNOWN", "message": "Could not encode the result as JSON"}}"#
         + "\n"
     }
+  }
+}
+
+extension JSONEncoder {
+  /// The encoder behind every JSON result: pretty-printed, sorted keys, slashes left alone.
+  public static func reminders() -> JSONEncoder {
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+    return encoder
   }
 }
 

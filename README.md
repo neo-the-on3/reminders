@@ -1,13 +1,14 @@
 # reminders
 
 A fast, native command-line tool for Apple Reminders, with section support and iCloud sync. One Swift binary,
-no Node.js or helper processes, with `--json` output for scripts and (planned) an MCP server mode for AI
+no Node.js or helper processes, with `--json` output for scripts and an MCP server mode (`reminders --mcp`) for AI
 assistants.
 
 > **Status: lists and reminders work; sections are next.** `lists`, `list`, `today`, `overdue`, `upcoming`,
 > `search`, `add`, `complete`, `update`, `delete`, `create-list`, `delete-list`, `authorize` and `doctor` work
-> against Apple Reminders through EventKit. Section commands and `--section` options, `demo` and the MCP server
-> arrive in follow-up PRs; until then they fail with a structured `NOT_IMPLEMENTED` error.
+> against Apple Reminders through EventKit, from the command line and as MCP tools. Section commands, tools and
+> `--section` options, and `demo`, arrive in follow-up PRs; until then they fail with a structured
+> `NOT_IMPLEMENTED` error.
 
 ## Requirements
 
@@ -93,9 +94,74 @@ mise run lint      # swift format lint --strict + swiftlint --strict (fails on a
 mise run format    # swift format --in-place
 ```
 
+## MCP server
+
+`reminders --mcp` runs a [Model Context Protocol](https://modelcontextprotocol.io) server on stdin/stdout, so AI
+assistants can manage reminders without shell access. Point your client at the binary with an **absolute path**,
+because desktop apps don't see your shell's `PATH`.
+
+**Claude Desktop**: edit `~/Library/Application Support/Claude/claude_desktop_config.json` (Settings ›
+Developer › Edit Config), then restart Claude:
+
+```json
+{
+  "mcpServers": {
+    "reminders": {
+      "command": "/usr/local/bin/reminders",
+      "args": ["--mcp"]
+    }
+  }
+}
+```
+
+**Claude Code**: `claude mcp add reminders -- /usr/local/bin/reminders --mcp`
+
+**Cursor**: add the same `mcpServers` entry to `~/.cursor/mcp.json` (or `.cursor/mcp.json` in a project).
+
+**Other clients** (VS Code, Zed, Windsurf, …): register a stdio server whose command is the binary and whose only
+argument is `--mcp`.
+
+**Try it without a client** using the MCP Inspector (needs Node.js) or the bundled script:
+
+```sh
+npx @modelcontextprotocol/inspector "$(scripts/build-release.sh)" --mcp
+scripts/mcp-session.sh .build/release/reminders reminders_lists '{}' reminders_today '{}'
+```
+
+**Permission.** macOS assigns Reminders access to the app that launched the server (Claude, Cursor, your
+terminal…), not to `reminders`. If tools report `PERMISSION_DENIED`, allow that app under System Settings ›
+Privacy & Security › Reminders and restart it.
+
+### Tools
+
+Each tool runs the same operation as the CLI command, with the same name matching and error codes.
+
+| Tool | Arguments | Result (`structuredContent`) |
+| --- | --- | --- |
+| `reminders_lists` | — | `{"lists": [list]}` |
+| `reminders_list` | `list`, `includeCompleted?` | `{"reminders": [reminder]}` |
+| `reminders_today`, `reminders_overdue` | — | `{"reminders": [reminder]}` |
+| `reminders_upcoming` | `days?` (default 7) | `{"reminders": [reminder]}` |
+| `reminders_search` | `query` | `{"reminders": [reminder]}` |
+| `reminders_add` | `list`, `title`, `due?`, `priority?`, `notes?`, `repeat?`, `section?`* | `{"message", "id"}` |
+| `reminders_complete` | `list`, `title`, `id?` | `{"message"}` |
+| `reminders_update` | `list`, `title`, `newTitle?`, `due?`, `clearDue?`, `priority?`, `notes?` | `{"message"}` |
+| `reminders_delete` | `list`, `title`, `id?` | `{"message"}` |
+| `reminders_create_list` | `name` | `{"message", "id"}` |
+| `reminders_delete_list` | `list` | `{"message"}` |
+| `reminders_sections`, `reminders_create_section`, `reminders_delete_section`, `reminders_move` | see schema | not implemented yet* |
+
+\* Section tools, and `section` on `reminders_add`, report `NOT_IMPLEMENTED` until sections land.
+
+Every tool publishes a JSON Schema for its input (unknown arguments are rejected) and, except the section tools,
+for its output, and carries annotations (`readOnlyHint` on queries, `destructiveHint` on deletions).
+Results come back both as `structuredContent` and as the same JSON in a text block. Failures are tool errors
+(`isError: true`) whose text is `{"error": {"code", "message", "suggestion"}}` with the CLI's error codes; an
+unknown tool name is a JSON-RPC `-32602` error.
+
 ## Design
 
-Four targets with one-way dependencies (`RemindersCLI` → `RemindersApple` → `RemindersCore`):
+Five targets with one-way dependencies (`RemindersCLI` → `RemindersMCP`, `RemindersApple` → `RemindersCore`):
 
 - **`RemindersCore`**: the platform-independent core, Foundation only, so it builds and is tested on Linux.
   - `Model/`: value types. `Reminder`, `ReminderList`, `Section`, `Priority`, `CalendarDay` (a time-zone-free
@@ -121,6 +187,11 @@ Four targets with one-way dependencies (`RemindersCLI` → `RemindersApple` → 
   EventKit objects never leave it (fetches convert to `Reminder` values, changes look items up by identifier).
   `MacSystemProbe` provides the machine facts. It compiles everywhere: off macOS, `UnsupportedPlatformStore`
   answers every call with `UNSUPPORTED_PLATFORM`.
+- **`RemindersMCP`**: the MCP server on the official [MCP Swift SDK](https://github.com/modelcontextprotocol/swift-sdk)
+  (pinned to 0.12.1). `ReminderTool` is an enum of the tools with their schemas and annotations;
+  `RemindersToolbox` validates arguments against those schemas (`ToolArguments`) and calls `RemindersService`,
+  so the tools share every rule with the CLI. `DrainingTransport` keeps a stdio session open until every request
+  has been answered.
 - **`RemindersCLI`**: the `reminders` executable, built on swift-argument-parser's `AsyncParsableCommand`. Each
   command conforms to `ConsoleCommand` and runs in a `CommandContext` (console, service, system probe), which
   renders results and errors consistently and maps failures to exit status 1 (usage errors exit 64). Tests run
@@ -138,7 +209,9 @@ Four targets with one-way dependencies (`RemindersCLI` → `RemindersApple` → 
   match [`RenderingFixtures.swift`](Tests/RemindersCoreTests/RenderingFixtures.swift) byte for byte.
 
 The completion tests also syntax-check each generated script with `bash -n`, `zsh -n` and `fish -n` when those
-shells are installed. Every command is also tested end to end against `InMemoryReminderStore`.
+shells are installed. Every command is also tested end to end against `InMemoryReminderStore`, and so is every
+MCP tool: the MCP tests connect an SDK client to the server over the SDK's in-memory transport (on Linux too) and
+check results against the published output schemas.
 
 ### Integration tests (macOS)
 
@@ -188,6 +261,12 @@ tool. Intentional differences:
   in headings.
 - **Order.** Every reminder listing is sorted by due date (earliest first, undated last), in text and `--json`
   alike; the original's JSON kept Reminders' own order.
+- **MCP results** are the CLI's `--json` data, wrapped in an object where it is a list (`{"lists": …}`,
+  `{"reminders": …}`), because MCP structured content must be an object. Confirmations are the CLI's messages,
+  such as `Completed "Buy milk" in "Groceries"`. Failures are `isError` results carrying the error code rather
+  than bare text. `reminders_complete` and `reminders_delete` also accept `id`, like the CLI's `--id`. Unknown
+  arguments are rejected. As before, MCP deletions need no `confirm` argument: clients ask the user to approve
+  destructive tools.
 - **Search** uses Foundation's `localizedStandardContains`, so it ignores diacritics as well as case (`cafe`
   finds `Café`).
 - **Reminder lookups** use full EventKit identifiers internally, so changing a reminder never acts on a

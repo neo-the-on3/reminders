@@ -10,11 +10,29 @@ let package = Package(
     .macOS(.v26)
   ],
   products: [
-    .library(name: "RemiCore", targets: ["RemiCore"])
+    .executable(name: "remi", targets: ["RemiCLI"]),
+    .library(name: "RemiCore", targets: ["RemiCore"]),
+  ],
+  dependencies: [
+    .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.8.2")
   ],
   targets: [
     // Pure, platform-independent logic: parsing, matching, formatting, sync bookkeeping.
     .target(name: "RemiCore"),
+    // Apple-only integrations (EventKit, private ReminderKit, Reminders SQLite store).
+    // Everything inside is guarded by `#if canImport(EventKit)` so the package still builds on Linux.
+    .target(
+      name: "RemiApple",
+      dependencies: ["RemiCore"]
+    ),
+    .executableTarget(
+      name: "RemiCLI",
+      dependencies: [
+        "RemiCore",
+        "RemiApple",
+        .product(name: "ArgumentParser", package: "swift-argument-parser"),
+      ]
+    ),
     .testTarget(
       name: "RemiCoreTests",
       dependencies: ["RemiCore"]

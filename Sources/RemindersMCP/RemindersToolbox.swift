@@ -53,15 +53,15 @@ public struct RemindersToolbox: Sendable {
           priority: arguments.priority("priority") ?? .none, notes: arguments.optionalString("notes"),
           repeatRule: arguments.optionalString("repeat")))
     case .complete:
-      return try await service.complete(reference(arguments))
+      return try await service.complete(reference(arguments, for: tool))
     case .delete:
-      return try await service.delete(reference(arguments))
+      return try await service.delete(reference(arguments, for: tool))
     case .update:
       let edit = ReminderEdit(
         title: try arguments.optionalString("newTitle"), due: try arguments.optionalString("due"),
         clearDue: try arguments.bool("clearDue") ?? false, priority: try arguments.priority("priority"),
         notes: try arguments.optionalString("notes"))
-      return try await service.update(reference(arguments), edit)
+      return try await service.update(reference(arguments, for: tool), edit)
     case .sections, .createSection, .deleteSection, .move:
       throw RemindersError.notImplemented("Sections (\(tool.rawValue))")
     case .today:
@@ -75,9 +75,18 @@ public struct RemindersToolbox: Sendable {
     }
   }
 
-  private func reference(_ arguments: ToolArguments) throws(RemindersError) -> ReminderReference {
-    ReminderReference(
-      list: try arguments.string("list"), title: try arguments.string("title"), id: try arguments.optionalString("id"))
+  /// The reminder a tool names: by `title`, or by `id` prefix, which wins when both are given.
+  private func reference(_ arguments: ToolArguments, for tool: ReminderTool) throws(RemindersError)
+    -> ReminderReference
+  {
+    let title = try arguments.optionalString("title").flatMap { $0.isEmpty ? nil : $0 }
+    let id = try arguments.optionalString("id").flatMap { $0.isEmpty ? nil : $0 }
+    guard title != nil || id != nil else {
+      throw RemindersError(
+        .invalidArgument, "\(tool.rawValue) needs \"title\" or \"id\" to find the reminder",
+        suggestion: "Pass the reminder's title (fuzzy matched) or an ID prefix")
+    }
+    return ReminderReference(list: try arguments.string("list"), title: title ?? "", id: id)
   }
 
   // MARK: Results

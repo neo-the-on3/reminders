@@ -145,9 +145,9 @@ Each tool runs the same operation as the CLI command, with the same name matchin
 | `reminders_upcoming` | `days?` (default 7) | `{"reminders": [reminder]}` |
 | `reminders_search` | `query` | `{"reminders": [reminder]}` |
 | `reminders_add` | `list`, `title`, `due?`, `priority?`, `notes?`, `repeat?`, `section?`* | `{"message", "id"}` |
-| `reminders_complete` | `list`, `title`, `id?` | `{"message"}` |
-| `reminders_update` | `list`, `title`, `newTitle?`, `due?`, `clearDue?`, `priority?`, `notes?` | `{"message"}` |
-| `reminders_delete` | `list`, `title`, `id?` | `{"message"}` |
+| `reminders_complete` | `list`, `title` or `id` | `{"message"}` |
+| `reminders_update` | `list`, `title` or `id`, `newTitle?`, `due?`, `clearDue?`, `priority?`, `notes?` | `{"message"}` |
+| `reminders_delete` | `list`, `title` or `id` | `{"message"}` |
 | `reminders_create_list` | `name` | `{"message", "id"}` |
 | `reminders_delete_list` | `list` | `{"message"}` |
 | `reminders_sections`, `reminders_create_section`, `reminders_delete_section`, `reminders_move` | see schema | not implemented yet* |
@@ -266,9 +266,12 @@ tool. Intentional differences:
 - **MCP results** are the CLI's `--json` data, wrapped in an object where it is a list (`{"lists": …}`,
   `{"reminders": …}`), because MCP structured content must be an object. Confirmations are the CLI's messages,
   such as `Completed "Buy milk" in "Groceries"`. Failures are `isError` results carrying the error code rather
-  than bare text. `reminders_complete` and `reminders_delete` also accept `id`, like the CLI's `--id`. Unknown
-  arguments are rejected. As before, MCP deletions need no `confirm` argument: clients ask the user to approve
-  destructive tools.
+  than bare text. Unknown arguments are rejected. As before, MCP deletions need no `confirm` argument: clients
+  ask the user to approve destructive tools.
+- **MCP reminder lookups.** `reminders_complete`, `reminders_update` and `reminders_delete` find the reminder
+  by `title` or by `id` (an ID prefix, like the CLI's `--id`), and `id` wins when both are given. The schema
+  marks neither as required because some clients reject a top-level `anyOf`; a call with neither is
+  `INVALID_ARGUMENT`.
 - **MCP calls run one at a time, in arrival order**, so a client that pipelines `create_list` and then `add`
   gets the list it just made.
 - **Search** uses Foundation's `localizedStandardContains`, so it ignores diacritics as well as case (`cafe`

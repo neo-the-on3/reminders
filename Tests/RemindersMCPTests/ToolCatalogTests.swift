@@ -33,6 +33,14 @@ struct ToolCatalogTests {
     await session.stop()
   }
 
+  @Test("complete, delete and update take title or id, requiring neither")
+  func titleOrID() {
+    for tool in [ReminderTool.complete, .delete, .update] {
+      #expect(JSONSchema.requiredNames(of: tool.inputSchema) == ["list"], "\(tool)")
+      #expect(JSONSchema.propertyNames(of: tool.inputSchema).isSuperset(of: ["title", "id"]), "\(tool)")
+    }
+  }
+
   @Test("annotations mark queries read-only and deletions destructive")
   func annotations() {
     #expect(ReminderTool.search.definition.annotations.readOnlyHint == true)

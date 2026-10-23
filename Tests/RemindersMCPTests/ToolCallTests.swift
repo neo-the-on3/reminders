@@ -58,6 +58,12 @@ struct ToolCallTests {
     #expect(report.title == "Write the report")
     #expect(report.dueDate == nil)
 
+    // title or id: an ID prefix alone is enough.
+    _ = try await session.success("reminders_update", ["list": "Work", "id": "w2", "priority": "low"])
+    #expect(await session.store.allReminders.first { $0.id == "W2" }?.priority == .low)
+    let byID = try await session.success("reminders_complete", ["list": "Work", "id": "W2"])
+    #expect(byID["message"] == "Completed \"Plan offsite\" in \"Work\"")
+
     // No confirmation step over MCP; clients confirm destructive tools themselves.
     let deleted = try await session.success("reminders_delete", ["list": "Groceries", "title": "x", "id": "g2"])
     #expect(deleted["message"] == "Deleted \"Buy bread\" from \"Groceries\"")
@@ -101,6 +107,9 @@ struct ToolCallTests {
       ("reminders_add", ["list": "Work", "title": "X", "priority": "urgent"], "Invalid \"priority\""),
       ("reminders_lists", ["verbose": true], "Unknown argument \"verbose\""),
       ("reminders_search", ["query": 3], "must be a string"),
+      ("reminders_complete", ["list": "Work"], "needs \"title\" or \"id\""),
+      ("reminders_delete", ["list": "Work", "title": ""], "needs \"title\" or \"id\""),
+      ("reminders_update", ["list": "Work", "newTitle": "X"], "needs \"title\" or \"id\""),
     ]
     for (name, arguments, message) in cases {
       let error = try await session.failure(name, arguments)

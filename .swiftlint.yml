@@ -10,8 +10,6 @@ excluded:
   # Generated or captured test data: regenerate rather than edit
   - Tests/RemindersCoreTests/DateReferenceCases.swift
   - Tests/RemindersCoreTests/RenderingFixtures.swift
-  - Tests/RemiCoreTests/ChronoFixtures.swift
-  - Tests/RemiCoreTests/OutputFixtures.swift
 
 disabled_rules:
   # --- Conflict with swift-format's layout (2-space indent, 120 columns, its own wrapping) ---

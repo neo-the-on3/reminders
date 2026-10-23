@@ -186,6 +186,8 @@ tool. Intentional differences:
 - **Overdue** has one meaning everywhere: incomplete and due on a day before today. `lists` counts, listing
   headings and `overdue` agree. The original also counted reminders due today in `lists`, and completed reminders
   in headings.
+- **Order.** Every reminder listing is sorted by due date (earliest first, undated last), in text and `--json`
+  alike; the original's JSON kept Reminders' own order.
 - **Search** uses Foundation's `localizedStandardContains`, so it ignores diacritics as well as case (`cafe`
   finds `Café`).
 - **Reminder lookups** use full EventKit identifiers internally, so changing a reminder never acts on a

@@ -110,6 +110,54 @@ extension PersistedJSON {
     }
   }
 
+  /// Indented JSON, keys in their stored order, for files people edit: `indent` per level, `"key": value`, and
+  /// arrays of scalars (such as command arguments) on one line.
+  func pretty(indent: String = "  ") -> String {
+    var out = ""
+    writePretty(into: &out, indent: indent, level: 0)
+    return out
+  }
+
+  private var isScalar: Bool {
+    switch self {
+    case .array, .object: false
+    default: true
+    }
+  }
+
+  private func writePretty(into out: inout String, indent: String, level: Int) {
+    let inner = String(repeating: indent, count: level + 1)
+    switch self {
+    case .array(let items) where items.allSatisfy(\.isScalar):
+      out += "["
+      for (index, item) in items.enumerated() {
+        if index > 0 { out += ", " }
+        item.write(into: &out)
+      }
+      out += "]"
+    case .array(let items):
+      out += "[\n"
+      for (index, item) in items.enumerated() {
+        out += inner
+        item.writePretty(into: &out, indent: indent, level: level + 1)
+        out += index < items.count - 1 ? ",\n" : "\n"
+      }
+      out += String(repeating: indent, count: level) + "]"
+    case .object(let fields) where !fields.isEmpty:
+      out += "{\n"
+      for (index, (key, value)) in fields.enumerated() {
+        out += inner
+        Self.quote(key, into: &out)
+        out += ": "
+        value.writePretty(into: &out, indent: indent, level: level + 1)
+        out += index < fields.count - 1 ? ",\n" : "\n"
+      }
+      out += String(repeating: indent, count: level) + "}"
+    default:
+      write(into: &out)
+    }
+  }
+
   /// Quotes a string, escaping only what JSON requires (non-ASCII stays as is).
   static func quote(_ s: String, into out: inout String) {
     out += "\""
@@ -186,9 +234,21 @@ extension PersistedJSON {
 
 /// Error thrown when text is not valid JSON.
 struct JSONParseError: Error, Equatable, Sendable, CustomStringConvertible {
+  /// Bytes (UTF-8) before the problem.
   let offset: Int
   let reason: String
   var description: String { "Invalid JSON at offset \(offset): \(reason)" }
+
+  /// Where the problem is in `text`, counting lines and columns from 1 (columns in characters).
+  func location(in text: String) -> (line: Int, column: Int) {
+    var (line, column, bytes) = (1, 1, 0)
+    for character in text {
+      bytes += character.utf8.count
+      guard bytes <= offset else { break }
+      if character == "\n" { (line, column) = (line + 1, 1) } else { column += 1 }
+    }
+    return (line, column)
+  }
 }
 
 extension PersistedJSON {

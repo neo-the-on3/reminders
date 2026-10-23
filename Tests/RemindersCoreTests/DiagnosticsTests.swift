@@ -20,6 +20,9 @@ private final class FakeSystem: SystemProbe {
     self.databases = databases
   }
 
+  var hostApplication: HostApplication? { HostApplication(name: "Terminal", bundlePath: Self.terminalPath) }
+  static let terminalPath = "/System/Applications/Utilities/Terminal.app"
+
   var openedPanes: [SettingsPane] { opened.withLock { $0 } }
 
   func remindersDataDirectoryExists() -> Bool { databases != nil }

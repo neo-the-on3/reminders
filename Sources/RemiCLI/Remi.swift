@@ -1,8 +1,8 @@
 // Command-line entry point for the Swift port of remi (MIT, Matthew O'Riordan).
 //
 // The command surface mirrors remi's commander definition in src/cli/index.ts: same commands,
-// aliases, arguments and options. Commands backed by Apple frameworks are wired up in later PRs and
-// currently report a structured "not implemented" error.
+// aliases, arguments and options. Commands run against Apple Reminders through RemiApple's EventKit
+// store; the section commands report a structured "not implemented" error until their layers land.
 
 import ArgumentParser
 import Foundation
@@ -10,7 +10,7 @@ import RemiApple
 import RemiCore
 
 @main
-struct Remi: ParsableCommand {
+struct Remi: AsyncParsableCommand {
   static let configuration = CommandConfiguration(
     commandName: "remi",
     abstract: "Fast, reliable CLI for Apple Reminders with section support and iCloud sync",
@@ -27,7 +27,7 @@ struct Remi: ParsableCommand {
 
   @OptionGroup var globals: GlobalOptions
 
-  static func main() {
+  static func main() async {
     let arguments = Array(CommandLine.arguments.dropFirst())
     // `remi --mcp` starts the MCP server instead of the CLI (as in remi)
     if arguments.contains("--mcp") {
@@ -38,7 +38,11 @@ struct Remi: ParsableCommand {
     }
     do {
       var command = try parseAsRoot(arguments)
-      try command.run()
+      if var asyncCommand = command as? any AsyncParsableCommand {
+        try await asyncCommand.run()
+      } else {
+        try command.run()
+      }
     } catch {
       exit(withError: error)
     }
@@ -55,18 +59,23 @@ struct GlobalOptions: ParsableArguments {
 }
 
 /// A remi subcommand: builds the shared ``Output`` and renders ``RemiCommandError``s like remi does.
-protocol RemiCommand: ParsableCommand {
+protocol RemiCommand: AsyncParsableCommand {
   var globals: GlobalOptions { get }
-  func execute(_ output: Output) throws
+  func execute(_ output: Output) async throws
 }
 
 extension RemiCommand {
-  func run() throws {
+  /// The command logic, bound to Apple Reminders.
+  func reminders(_ output: Output) -> CommandContext {
+    CommandContext(store: ApplePlatform.makeReminderStore(), output: output)
+  }
+
+  func run() async throws {
     let output = Output.standard()
     output.jsonMode = globals.json
     output.verboseMode = globals.verbose
     do {
-      try execute(output)
+      try await execute(output)
     } catch let error as RemiCommandError {
       output.error(error.toRemiError())
       throw ExitCode.failure

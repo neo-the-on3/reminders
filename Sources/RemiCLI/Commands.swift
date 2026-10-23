@@ -1,4 +1,4 @@
-// remi's commands. Apple-backed ones are placeholders until the EventKit/ReminderKit/SQLite layers land.
+// remi's commands. The section commands are placeholders until the ReminderKit/SQLite layers land.
 
 import ArgumentParser
 import RemiApple
@@ -10,7 +10,9 @@ struct Today: RemiCommand {
   static let configuration = CommandConfiguration(
     commandName: "today", abstract: "Show reminders due today")
   @OptionGroup var globals: GlobalOptions
-  func execute(_ output: Output) throws { throw ApplePlatform.unavailable("remi today") }
+  func execute(_ output: Output) async throws {
+    try await reminders(output).today()
+  }
 }
 
 struct Upcoming: RemiCommand {
@@ -18,14 +20,18 @@ struct Upcoming: RemiCommand {
     commandName: "upcoming", abstract: "Show upcoming reminders")
   @OptionGroup var globals: GlobalOptions
   @Option(help: "Number of days to look ahead") var days = "7"
-  func execute(_ output: Output) throws { throw ApplePlatform.unavailable("remi upcoming") }
+  func execute(_ output: Output) async throws {
+    try await reminders(output).upcoming(days: days)
+  }
 }
 
 struct Overdue: RemiCommand {
   static let configuration = CommandConfiguration(
     commandName: "overdue", abstract: "Show overdue reminders")
   @OptionGroup var globals: GlobalOptions
-  func execute(_ output: Output) throws { throw ApplePlatform.unavailable("remi overdue") }
+  func execute(_ output: Output) async throws {
+    try await reminders(output).overdue()
+  }
 }
 
 // MARK: - Browse
@@ -36,14 +42,18 @@ struct ListCommand: RemiCommand {
   @Argument var name: String
   @Option(help: "Filter by section") var section: String?
   @Flag(help: "Include completed reminders") var includeCompleted = false
-  func execute(_ output: Output) throws { throw ApplePlatform.unavailable("remi list") }
+  func execute(_ output: Output) async throws {
+    try await reminders(output).list(name, includeCompleted: includeCompleted)
+  }
 }
 
 struct Lists: RemiCommand {
   static let configuration = CommandConfiguration(
     commandName: "lists", abstract: "List all reminder lists", aliases: ["ls"])
   @OptionGroup var globals: GlobalOptions
-  func execute(_ output: Output) throws { throw ApplePlatform.unavailable("remi lists") }
+  func execute(_ output: Output) async throws {
+    try await reminders(output).lists()
+  }
 }
 
 struct Search: RemiCommand {
@@ -51,7 +61,9 @@ struct Search: RemiCommand {
     commandName: "search", abstract: "Search reminders across all lists")
   @OptionGroup var globals: GlobalOptions
   @Argument var query: String
-  func execute(_ output: Output) throws { throw ApplePlatform.unavailable("remi search") }
+  func execute(_ output: Output) async throws {
+    try await reminders(output).search(query)
+  }
 }
 
 // MARK: - Task actions
@@ -67,7 +79,10 @@ struct Add: RemiCommand {
   @Option(help: "Priority: none, low, medium, high") var priority = "none"
   @Option(help: "Reminder notes") var notes: String?
   @Option(help: "Recurrence: \"daily\", \"weekly\", \"every 2 weeks\", \"every 3 months\"") var `repeat`: String?
-  func execute(_ output: Output) throws { throw ApplePlatform.unavailable("remi add") }
+  func execute(_ output: Output) async throws {
+    try await reminders(output).add(
+      list: list, title: title, section: section, due: due, priority: priority, notes: notes, repeat: `repeat`)
+  }
 }
 
 struct Complete: RemiCommand {
@@ -77,7 +92,9 @@ struct Complete: RemiCommand {
   @Argument var list: String
   @Argument var title: String
   @Option(help: "Match by reminder ID instead of title") var id: String?
-  func execute(_ output: Output) throws { throw ApplePlatform.unavailable("remi complete") }
+  func execute(_ output: Output) async throws {
+    try await reminders(output).complete(list: list, title: title, id: id)
+  }
 }
 
 struct Update: RemiCommand {
@@ -91,7 +108,10 @@ struct Update: RemiCommand {
   @Flag(help: "Remove due date") var clearDue = false
   @Option(help: "New priority: none, low, medium, high") var priority: String?
   @Option(help: "New notes") var notes: String?
-  func execute(_ output: Output) throws { throw ApplePlatform.unavailable("remi update") }
+  func execute(_ output: Output) async throws {
+    try await reminders(output).update(
+      list: list, title: title, newTitle: newTitle, due: due, clearDue: clearDue, priority: priority, notes: notes)
+  }
 }
 
 struct Delete: RemiCommand {
@@ -102,7 +122,9 @@ struct Delete: RemiCommand {
   @Argument var title: String
   @Option(help: "Match by reminder ID instead of title") var id: String?
   @Flag(help: "Confirm deletion (required in interactive mode)") var confirm = false
-  func execute(_ output: Output) throws { throw ApplePlatform.unavailable("remi delete") }
+  func execute(_ output: Output) async throws {
+    try await reminders(output).delete(list: list, title: title, id: id, confirm: confirm)
+  }
 }
 
 // MARK: - Organization: sections and lists
@@ -112,7 +134,7 @@ struct Sections: RemiCommand {
     commandName: "sections", abstract: "List sections in a reminder list")
   @OptionGroup var globals: GlobalOptions
   @Argument var list: String
-  func execute(_ output: Output) throws { throw ApplePlatform.unavailable("remi sections") }
+  func execute(_ output: Output) async throws { throw ApplePlatform.unavailable("remi sections") }
 }
 
 struct Move: RemiCommand {
@@ -122,7 +144,7 @@ struct Move: RemiCommand {
   @Argument var list: String
   @Argument var title: String
   @Option(help: "Target section name") var toSection: String
-  func execute(_ output: Output) throws { throw ApplePlatform.unavailable("remi move") }
+  func execute(_ output: Output) async throws { throw ApplePlatform.unavailable("remi move") }
 }
 
 struct CreateSection: RemiCommand {
@@ -131,7 +153,7 @@ struct CreateSection: RemiCommand {
   @OptionGroup var globals: GlobalOptions
   @Argument var list: String
   @Argument var name: String
-  func execute(_ output: Output) throws { throw ApplePlatform.unavailable("remi create-section") }
+  func execute(_ output: Output) async throws { throw ApplePlatform.unavailable("remi create-section") }
 }
 
 struct DeleteSection: RemiCommand {
@@ -140,14 +162,16 @@ struct DeleteSection: RemiCommand {
   @OptionGroup var globals: GlobalOptions
   @Argument var list: String
   @Argument var name: String
-  func execute(_ output: Output) throws { throw ApplePlatform.unavailable("remi delete-section") }
+  func execute(_ output: Output) async throws { throw ApplePlatform.unavailable("remi delete-section") }
 }
 
 struct CreateList: RemiCommand {
   static let configuration = CommandConfiguration(commandName: "create-list", abstract: "Create a new reminder list")
   @OptionGroup var globals: GlobalOptions
   @Argument var name: String
-  func execute(_ output: Output) throws { throw ApplePlatform.unavailable("remi create-list") }
+  func execute(_ output: Output) async throws {
+    try await reminders(output).createList(name)
+  }
 }
 
 struct DeleteList: RemiCommand {
@@ -155,7 +179,9 @@ struct DeleteList: RemiCommand {
   @OptionGroup var globals: GlobalOptions
   @Argument var name: String
   @Flag(help: "Confirm deletion (required in interactive mode)") var confirm = false
-  func execute(_ output: Output) throws { throw ApplePlatform.unavailable("remi delete-list") }
+  func execute(_ output: Output) async throws {
+    try await reminders(output).deleteList(name, confirm: confirm)
+  }
 }
 
 // MARK: - System
@@ -165,14 +191,16 @@ struct Demo: RemiCommand {
     commandName: "demo", abstract: "Create a demo list to showcase remi features", shouldDisplay: false)
   @OptionGroup var globals: GlobalOptions
   @Flag(help: "Remove the demo list") var cleanup = false
-  func execute(_ output: Output) throws { throw ApplePlatform.unavailable("remi demo") }
+  func execute(_ output: Output) async throws { throw ApplePlatform.unavailable("remi demo") }
 }
 
 struct Authorize: RemiCommand {
   static let configuration = CommandConfiguration(
     commandName: "authorize", abstract: "Request Reminders access permission")
   @OptionGroup var globals: GlobalOptions
-  func execute(_ output: Output) throws { throw ApplePlatform.unavailable("remi authorize") }
+  func execute(_ output: Output) async throws {
+    await reminders(output).authorize(system: ApplePlatform.makeSystemEnvironment())
+  }
 }
 
 struct Doctor: RemiCommand {
@@ -181,7 +209,10 @@ struct Doctor: RemiCommand {
   @OptionGroup var globals: GlobalOptions
   @Flag(help: "Verify sync status") var sync = false
   @Flag(help: "Show database location and stats") var db = false
-  func execute(_ output: Output) throws { throw ApplePlatform.unavailable("remi doctor") }
+  func execute(_ output: Output) async throws {
+    let passed = await reminders(output).doctor(system: ApplePlatform.makeSystemEnvironment(), databaseStats: db)
+    if !passed { throw ExitCode.failure }
+  }
 }
 
 struct Completions: RemiCommand {
@@ -190,7 +221,7 @@ struct Completions: RemiCommand {
   @OptionGroup var globals: GlobalOptions
   @Argument(help: "Shell type: bash, zsh, or fish") var shell: String
 
-  func execute(_ output: Output) throws {
+  func execute(_ output: Output) async throws {
     guard let kind = RemiCore.CompletionShell(rawValue: shell) else {
       output.stderr.write("Unknown shell: \(shell). Use: bash, zsh, or fish\n")
       throw ExitCode.failure

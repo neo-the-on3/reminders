@@ -176,6 +176,17 @@ struct MCPConfigDocumentTests {
     #expect(try MCPConfigDocument(only, path: path).removing(entry, force: true).text == #"{"mcpServers": {}, "x": 1}"#)
   }
 
+  @Test("removing the last thing in the file says nothing is left; other servers or keys keep it")
+  func leavesNothing() throws {
+    let only = #"{"mcpServers": {"reminders": {"command": "x"}}}"#
+    #expect(try MCPConfigDocument(only, path: path).removing(entry, force: true).leavesNothing)
+    let withKey = #"{"mcpServers": {"reminders": {"command": "x"}}, "theme": "dark"}"#
+    #expect(try !MCPConfigDocument(withKey, path: path).removing(entry, force: true).leavesNothing)
+    let withServer = #"{"mcpServers": {"reminders": {"command": "x"}, "a": {"command": "a"}}}"#
+    #expect(try !MCPConfigDocument(withServer, path: path).removing(entry, force: true).leavesNothing)
+    #expect(try !MCPConfigDocument(nil, path: path).removing(entry, force: true).leavesNothing)
+  }
+
   @Test("a duplicated reminders key is rewritten whole rather than half-edited")
   func duplicateKey() throws {
     let duplicated = #"{"mcpServers": {"reminders": {"command": "x"}, "reminders": {"command": "y"}}}"#

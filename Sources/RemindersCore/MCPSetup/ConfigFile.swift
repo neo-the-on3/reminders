@@ -46,6 +46,29 @@ public enum ConfigFile {
     }
   }
 
+  /// Deletes the file at `path` after backing it up like ``write(_:to:now:)``; returns the backup's path. Its folder
+  /// stays.
+  @discardableResult
+  public static func delete(_ path: String, now: Date = .now) throws(RemindersError) -> String {
+    let path = PhysicalPath.of(path)
+    let manager = FileManager.default
+    do {
+      let backup = backupPath(for: path, at: now, exists: manager.fileExists(atPath:))
+      try manager.copyItem(atPath: path, toPath: backup)
+      try manager.removeItem(atPath: path)
+      return backup
+    } catch {
+      throw RemindersError(
+        .setupFailed, "Cannot delete \(path): \(error.localizedDescription)",
+        suggestion: "Check that the folder is writable")
+    }
+  }
+
+  /// Whether `path` itself (not what it points at) is a symbolic link.
+  public static func isSymbolicLink(_ path: String) -> Bool {
+    (try? FileManager.default.attributesOfItem(atPath: path)[.type] as? FileAttributeType) == .typeSymbolicLink
+  }
+
   /// `<path>.bak-YYYYMMDD-HHMMSS` in `timeZone`, with `-2`, `-3`, … when that exists already.
   static func backupPath(
     for path: String, at date: Date, timeZone: TimeZone = .current, exists: (String) -> Bool

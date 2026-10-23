@@ -31,6 +31,9 @@ public struct MCPConfigDocument: Sendable {
   public struct Edit: Sendable {
     public var outcome: SetupOutcome
     public var text: String?
+    /// Removing `reminders` left nothing else in the file (no other servers, no other keys), so it can go;
+    /// `text` is then the empty shell, for when the file has to stay.
+    public var leavesNothing = false
   }
 
   private var root: PersistedJSON
@@ -89,7 +92,10 @@ public struct MCPConfigDocument: Sendable {
       throw Self.conflict(path, existing, fix: "remove it anyway (the file is backed up first)")
     }
     servers[MCPServerEntry.name] = nil
-    return Edit(outcome: .removed, text: splicedRemoval() ?? rendering(servers))
+    // Other keys mean someone else's settings: keep them and the (now empty) `mcpServers`, since there's no telling
+    // whether setup added it.
+    let leavesNothing = servers.objectValue?.isEmpty == true && root.objectValue?.count == 1
+    return Edit(outcome: .removed, text: splicedRemoval() ?? rendering(servers), leavesNothing: leavesNothing)
   }
 
   // MARK: Splicing

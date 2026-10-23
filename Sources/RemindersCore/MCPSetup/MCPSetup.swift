@@ -137,17 +137,30 @@ public struct MCPSetup: Sendable {
   public func configure(_ client: MCPClient, at path: String, _ options: SetupOptions) throws(RemindersError)
     -> SetupReport
   {
+    let given = path
     let path = PhysicalPath.of(path)
     let entry = try serverEntry(type: client == .cursor ? "stdio" : nil)
     let document = try MCPConfigDocument(try ConfigFile.read(path), path: path)
     let edit =
       options.remove
       ? try document.removing(entry, force: options.force) : try document.adding(entry, force: options.force)
+    // A file left with nothing but an empty `mcpServers` is deleted (after a backup, like any change), unless it's
+    // reached through a symlink, which would be left dangling.
+    let deletes = edit.leavesNothing && !ConfigFile.isSymbolicLink(given)
     var backup: String?
-    if let text = edit.text, !options.dryRun { backup = try ConfigFile.write(text, to: path, now: environment.now()) }
-    return SetupReport(
+    if !options.dryRun {
+      if deletes {
+        backup = try ConfigFile.delete(path, now: environment.now())
+      } else if let text = edit.text {
+        backup = try ConfigFile.write(text, to: path, now: environment.now())
+      }
+    }
+    var report = SetupReport(
       client: client, outcome: edit.outcome, dryRun: options.dryRun, configPath: path, backupPath: backup,
-      server: entry, preview: options.dryRun ? edit.text : nil, nextSteps: client.nextSteps(after: edit.outcome))
+      server: entry, preview: options.dryRun && !deletes ? edit.text : nil,
+      nextSteps: client.nextSteps(after: edit.outcome))
+    report.fileDeleted = deletes
+    return report
   }
 
   /// Registers with Claude Code through `claude mcp`, or shows the commands when `claude` isn't on `PATH`.
@@ -246,6 +259,8 @@ public struct SetupReport: ConsoleRepresentable {
   /// With `--dry-run`, the file as it would be written.
   public var preview: String?
   public var nextSteps: [String]
+  /// Whether the config file was deleted (or with `--dry-run` would be) because nothing else was left in it.
+  public var fileDeleted = false
   /// Whether this was `--remove`; it tells apart the two kinds of `manual` outcome.
   var removing = false
   /// About the Reminders permission prompt, once the server is registered.
@@ -255,7 +270,7 @@ public struct SetupReport: ConsoleRepresentable {
   }
 
   private enum CodingKeys: String, CodingKey {
-    case client, outcome, dryRun, configPath, backupPath, server, commands, preview, nextSteps, note
+    case client, outcome, dryRun, configPath, fileDeleted, backupPath, server, commands, preview, nextSteps, note
   }
 
   public func encode(to encoder: any Encoder) throws {
@@ -264,6 +279,7 @@ public struct SetupReport: ConsoleRepresentable {
     try container.encode(outcome, forKey: .outcome)
     try container.encode(dryRun, forKey: .dryRun)
     try container.encodeIfPresent(configPath, forKey: .configPath)
+    try container.encode(fileDeleted, forKey: .fileDeleted)
     try container.encodeIfPresent(backupPath, forKey: .backupPath)
     try container.encode(server, forKey: .server)
     try container.encodeIfPresent(commands, forKey: .commands)
@@ -295,6 +311,9 @@ public struct SetupReport: ConsoleRepresentable {
     case .replaced:
       return would
         ? "Would replace \(name)'s reminders server" : "Replaced \(name)'s reminders server"
+    case .removed where fileDeleted:
+      return (would ? "Would remove" : "Removed") + " the reminders server from \(name) and "
+        + (would ? "delete" : "deleted") + " its config, which held nothing else"
     case .removed:
       return would ? "Would remove the reminders server from \(name)" : "Removed the reminders server from \(name)"
     case .unchanged: return "\(name) already has this reminders server; nothing changed"
@@ -313,7 +332,10 @@ public struct SetupReport: ConsoleRepresentable {
   public func text(using renderer: TextRenderer) -> String {
     let style = renderer.style
     var text = outcome == .manual ? headline + "\n" : renderer.confirmation(headline)
-    if let configPath { text += style("  Config: \(configPath)\n", .dim) }
+    if let configPath {
+      let deleted = fileDeleted ? (dryRun ? " (would be deleted)" : " (deleted)") : ""
+      text += style("  Config: \(configPath)\(deleted)\n", .dim)
+    }
     if let backupPath { text += style("  Backup: \(backupPath)\n", .dim) }
     text += style("  Server: \(([server.command] + server.args).map(Self.shellQuoted).joined(separator: " "))\n", .dim)
     let label = outcome == .manual ? "  " : dryRun ? "  Would run: " : "  Ran: "

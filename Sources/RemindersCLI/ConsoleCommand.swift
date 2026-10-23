@@ -19,10 +19,12 @@ struct CommandContext: Sendable {
 
   /// The real thing: stdout/stderr, the platform's Reminders store and this machine.
   static func live(_ globals: GlobalOptions) -> CommandContext {
-    CommandContext(
+    let system = RemindersPlatform.makeSystemProbe()
+    return CommandContext(
       console: .standard(format: globals.json ? .json : .text, verbose: globals.verbose),
-      service: RemindersService(store: RemindersPlatform.makeStore()),
-      system: RemindersPlatform.makeSystemProbe())
+      service: RemindersService(
+        store: RemindersPlatform.makeStore(), permissions: PermissionGuidance(host: system.hostApplication)),
+      system: system)
   }
 }
 

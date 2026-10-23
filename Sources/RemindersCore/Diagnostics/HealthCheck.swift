@@ -53,10 +53,13 @@ public struct HealthReport: ConsoleRepresentable {
 public struct AuthorizationReport: ConsoleRepresentable {
   public var remindersAccess: ReminderAccess
   public var databaseAccess: Bool
+  /// The app the permissions belong to, when known.
+  public var host: HostApplication?
 
-  public init(remindersAccess: ReminderAccess, databaseAccess: Bool) {
+  public init(remindersAccess: ReminderAccess, databaseAccess: Bool, host: HostApplication? = nil) {
     self.remindersAccess = remindersAccess
     self.databaseAccess = databaseAccess
+    self.host = host
   }
 
   public func text(using renderer: TextRenderer) -> String {

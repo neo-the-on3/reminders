@@ -37,7 +37,9 @@ public struct RemindersToolbox: Sendable {
       return ListsResult(lists: try await service.lists())
     case .list:
       let listing = try await service.contents(
-        ofList: arguments.string("list"), includeCompleted: arguments.bool("includeCompleted") ?? false)
+        ofList: arguments.string("list"),
+        section: arguments.optionalString("section").flatMap { $0.isEmpty ? nil : $0 },
+        includeCompleted: arguments.bool("includeCompleted") ?? false)
       return RemindersResult(listing)
     case .createList:
       return try await service.createList(named: arguments.string("name"))
@@ -62,7 +64,9 @@ public struct RemindersToolbox: Sendable {
         clearDue: try arguments.bool("clearDue") ?? false, priority: try arguments.priority("priority"),
         notes: try arguments.optionalString("notes"))
       return try await service.update(reference(arguments, for: tool), edit)
-    case .sections, .createSection, .deleteSection, .move:
+    case .sections:
+      return SectionsResult(sections: try await service.sections(ofList: arguments.string("list")).sections)
+    case .createSection, .deleteSection, .move:
       throw RemindersError.notImplemented("Sections (\(tool.rawValue))")
     case .today:
       return RemindersResult(try await service.dueToday())
@@ -114,6 +118,11 @@ private struct ErrorPayload: Encodable {
 /// `reminders_lists`: `{"lists": [...]}` (MCP structured results are objects).
 private struct ListsResult: Encodable, Sendable {
   let lists: [ReminderList]
+}
+
+/// `reminders_sections`: `{"sections": [...]}`.
+private struct SectionsResult: Encodable, Sendable {
+  let sections: [Section]
 }
 
 /// Reminder queries: `{"reminders": [...]}`.

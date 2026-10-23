@@ -17,6 +17,11 @@ run = "scripts/build-release.sh"
 description = "Run unit tests"
 run = "swift test"
 
+[tasks.integration]
+description = "End-to-end tests against Apple Reminders (macOS, needs Reminders access; uses a throwaway list)"
+env = { REMI_INTEGRATION = "1" }
+run = "swift test --filter RemiIntegrationTests"
+
 [tasks.lint]
 description = "Check formatting (swift-format) and lint (SwiftLint); fails on any violation"
 run = ["swift format lint --strict --recursive --parallel .", "swiftlint lint --strict --quiet"]

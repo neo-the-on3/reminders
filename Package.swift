@@ -48,5 +48,10 @@ let package = Package(
       name: "RemiCoreTests",
       dependencies: ["RemiCore"]
     ),
+    // Opt-in end-to-end tests against Apple Reminders (REMI_INTEGRATION=1); they drive the built remi binary.
+    .testTarget(
+      name: "RemiIntegrationTests",
+      dependencies: ["RemiCore", "RemiCLI"]
+    ),
   ]
 )

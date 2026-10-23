@@ -28,13 +28,27 @@ private func makeService(_ store: InMemoryReminderStore) -> RemindersService {
 
 @Suite("Reminders service: queries")
 struct ServiceQueryTests {
-  @Test("lists are sorted by title with incomplete and started-due-day counts")
+  @Test("lists are sorted by title with incomplete and overdue counts")
   func lists() async throws {
     let lists = try await makeService(makeStore()).lists()
     #expect(lists.map(\.title) == ["Groceries", "Work"])
     #expect(lists.map(\.reminderCount) == [2, 3])
-    // Due today counts as overdue in list counts (its day has started); tomorrow doesn't.
-    #expect(lists.map(\.overdueCount) == [2, 0])
+    // Only "Buy bread" (due 2026-10-20) is overdue; "Buy milk" is due today.
+    #expect(lists.map(\.overdueCount) == [1, 0])
+  }
+
+  @Test("list counts, overdue and today agree on what is overdue, at any time of day")
+  func overdueAgrees() async throws {
+    for hour in [0, 10, 23] {
+      let now = Date(timeIntervalSince1970: 1_792_713_600 + Double(hour) * 3600)  // 2026-10-23 at `hour` UTC
+      let store = makeStore()
+      let service = RemindersService(store: store, clock: DayClock(now: now, timeZone: .gmt))
+      let counted = try await service.lists().reduce(0) { $0 + $1.overdueCount }
+      let overdue = try await service.overdue().reminders.map(\.id)
+      #expect(counted == overdue.count, "at \(hour):00")
+      #expect(overdue == ["G2"], "at \(hour):00")
+      #expect(try await service.dueToday().reminders.map(\.id) == ["G1"], "at \(hour):00")
+    }
   }
 
   @Test("list shows incomplete reminders, then completed ones on request")

@@ -44,7 +44,7 @@ public struct RemindersService: Sendable {
       var list = list
       let reminders = byList[list.id] ?? []
       list.reminderCount = reminders.count
-      list.overdueCount = reminders.count { isDueDayStarted($0) }
+      list.overdueCount = reminders.count(where: clock.isOverdue)
       return list
     }
     .sorted { $0.title < $1.title }
@@ -73,9 +73,7 @@ public struct RemindersService: Sendable {
 
   /// `reminders overdue`: incomplete reminders due before today.
   public func overdue() async throws(RemindersError) -> ReminderListing {
-    let today = clock.today
-    let reminders = try await incomplete { $0.dueDate.map { $0 < today } ?? false }
-    return ReminderListing(reminders, heading: "Overdue", layout: .overdue)
+    ReminderListing(try await incomplete(where: clock.isOverdue), heading: "Overdue", layout: .overdue)
   }
 
   /// `reminders upcoming`: incomplete reminders due within `days` days from now, overdue ones included.
@@ -174,12 +172,6 @@ public struct RemindersService: Sendable {
       try await store.reminders(inLists: [list.id], .incomplete)
       + store.reminders(inLists: [list.id], .completed)
     return (list, try reminders.find(title: reference.title, idPrefix: reference.id, inList: list.title))
-  }
-
-  /// Whether the reminder's due day has begun, which is how list counts define overdue (due today counts).
-  private func isDueDayStarted(_ reminder: Reminder) -> Bool {
-    guard let start = reminder.dueDate?.startDate(in: clock.calendar) else { return false }
-    return start < clock.now
   }
 
   private func parseDueDate(_ text: String) throws(RemindersError) -> CalendarDay {

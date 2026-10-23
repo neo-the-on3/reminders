@@ -183,6 +183,9 @@ tool. Intentional differences:
   `{"success": false, "data": ..., "error": ...}` when they fail: `CHECKS_FAILED` for `doctor`,
   `PERMISSION_DENIED` for `authorize`. `authorize --json` prints the outcome (`remindersAccess`,
   `databaseAccess`, `host`) instead of nothing.
+- **Overdue** has one meaning everywhere: incomplete and due on a day before today. `lists` counts, listing
+  headings and `overdue` agree. The original also counted reminders due today in `lists`, and completed reminders
+  in headings.
 - **Search** uses Foundation's `localizedStandardContains`, so it ignores diacritics as well as case (`cafe`
   finds `Café`).
 - **Reminder lookups** use full EventKit identifiers internally, so changing a reminder never acts on a

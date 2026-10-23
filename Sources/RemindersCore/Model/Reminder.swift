@@ -31,7 +31,7 @@ public struct ReminderList: Identifiable, Hashable, Sendable, Codable {
   public var title: String
   /// Incomplete reminders in the list.
   public var reminderCount: Int
-  /// Incomplete reminders whose due day has started.
+  /// Incomplete reminders due before today: the ones `reminders overdue` shows.
   public var overdueCount: Int
 
   public init(id: String, title: String, reminderCount: Int = 0, overdueCount: Int = 0) {

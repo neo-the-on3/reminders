@@ -231,13 +231,16 @@ Each tool runs the same operation as the CLI command, with the same name matchin
 | `reminders_create_list` | `name` | `{"message", "id"}` |
 | `reminders_delete_list` | `list` | `{"message"}` |
 | `reminders_sections` | `list` | `{"sections": [section]}` |
-| `reminders_create_section`, `reminders_delete_section`, `reminders_move` | see schema | not implemented yet* |
+| `reminders_create_section` | `list`, `name` (reused if a section has exactly that name) | `{"message", "id"}` |
+| `reminders_delete_section` | `list`, `name` | `{"message"}` |
+| `reminders_move` | see schema | not implemented yet* |
 
-\* Tools that change sections, and `section` on `reminders_add`, report `NOT_IMPLEMENTED` for now. Reading
-sections needs Full Disk Access for the app running the server; without it, `reminders_sections` and a `section`
-filter fail with `PERMISSION_DENIED`, and `reminders_list` still works, without section names.
+\* `reminders_move`, and `section` on `reminders_add`, report `NOT_IMPLEMENTED` for now. Sections need Full Disk
+Access for the app running the server; without it, the section tools and a `section` filter fail with
+`PERMISSION_DENIED`, and `reminders_list` still works, without section names. Creating and deleting sections
+also needs ReminderKit; where it's missing or changed they fail with `REMINDERKIT_UNAVAILABLE`.
 
-Every tool publishes a JSON Schema for its input (unknown arguments are rejected) and, except those three,
+Every tool publishes a JSON Schema for its input (unknown arguments are rejected) and, except `reminders_move`,
 for its output, and carries annotations (`readOnlyHint` on queries, `destructiveHint` on deletions).
 Results come back both as `structuredContent` and as the same JSON in a text block. Failures are tool errors
 (`isError: true`) whose text is `{"error": {"code", "message", "suggestion"}}` with the CLI's error codes; an

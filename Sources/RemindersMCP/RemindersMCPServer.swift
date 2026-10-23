@@ -13,8 +13,8 @@ public struct RemindersMCPServer: Sendable {
     Manage Apple Reminders: lists, reminders, due dates, priorities and recurrence. List and reminder names are \
     fuzzy matched. Errors come back as {"error": {"code", "message", "suggestion"}}; PERMISSION_DENIED means macOS \
     hasn't given Reminders access to this server (or to the app that started it); show the user the error's \
-    suggestion, which names what to allow and says how. Sections can be listed and filtered by (they need Full \
-    Disk Access); creating, deleting and moving into sections are not implemented yet.
+    suggestion, which names what to allow and says how. Sections can be listed, filtered by, created and deleted \
+    (they need Full Disk Access); moving reminders into sections is not implemented yet.
     """
 
   /// A configured server, not yet started.

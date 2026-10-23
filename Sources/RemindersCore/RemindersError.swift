@@ -18,6 +18,12 @@ public struct RemindersError: Error, Hashable, Sendable, Codable, CustomStringCo
     case storeFailure = "STORE_FAILURE"
     /// Apple Reminders isn't available on this platform (any OS other than macOS).
     case unsupportedPlatform = "UNSUPPORTED_PLATFORM"
+    /// A client's configuration file can't be read as JSON, or isn't shaped as expected; it was left alone.
+    case configInvalid = "CONFIG_INVALID"
+    /// The client already has a different `reminders` server; `--force` replaces it.
+    case configConflict = "CONFIG_CONFLICT"
+    /// Writing a configuration file, or a client's own setup command, failed.
+    case setupFailed = "SETUP_FAILED"
     /// The command exists but isn't implemented yet.
     case notImplemented = "NOT_IMPLEMENTED"
     case unknown = "UNKNOWN"

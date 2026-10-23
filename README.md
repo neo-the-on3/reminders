@@ -42,6 +42,9 @@ scripts/build-release.sh          # prints .build/release/reminders
 ```
 
 Each CI run on macOS uploads the signed release binary as the `reminders-macos` artifact.
+`scripts/build-release.sh --universal --version 1.2.3` builds the release binary for both architectures and stamps
+the version into `reminders --version` and the embedded Info.plist, leaving the sources unchanged afterwards.
+Without `--version`, builds report the development version, `0.1.0-dev`.
 
 ### Reminders permission
 

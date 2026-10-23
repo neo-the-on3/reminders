@@ -36,11 +36,10 @@ struct MCPSession {
     store: InMemoryReminderStore = makeStore(), permissions: PermissionGuidance = PermissionGuidance(host: nil)
   ) async throws -> MCPSession {
     let (clientTransport, serverTransport) = await InMemoryTransport.createConnectedPair()
-    let server = await RemindersMCPServer(
+    let server = try await RemindersMCPServer(
       service: RemindersService(store: store, clock: utcClock, permissions: permissions)
     )
-    .makeServer()
-    try await server.start(transport: serverTransport)
+    .start(on: serverTransport)
     let client = Client(name: "tests", version: "1.0")
     try await client.connect(transport: clientTransport)
     return MCPSession(client: client, server: server, store: store)

@@ -31,7 +31,7 @@ struct RemindersCommand: AsyncParsableCommand {
         let permissions = PermissionGuidance(host: RemindersPlatform.makeSystemProbe().hostApplication)
         let server = RemindersMCPServer(
           service: RemindersService(store: RemindersPlatform.makeStore(), permissions: permissions))
-        try await server.run(on: DrainingTransport(StdioTransport()))
+        try await server.run(on: StdioTransport())
       } catch {
         StandardStream(.error).write("reminders --mcp: \(error)\n")
         Foundation.exit(ExitCode.failure.rawValue)

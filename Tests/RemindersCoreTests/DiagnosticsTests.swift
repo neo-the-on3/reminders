@@ -116,6 +116,25 @@ struct DiagnosticsTests {
     #expect(report.failureCount == 2)
   }
 
+  @Test("the summary counts warnings instead of claiming every check passed")
+  func summary() {
+    let ok = HealthCheck("A", .ok, "Fine")
+    let warn = HealthCheck("B", .warn, "Hmm")
+    let fail = HealthCheck("C", .fail, "Broken")
+    let cases: [([HealthCheck], String)] = [
+      ([ok], "All checks passed."),
+      ([ok, warn], "All required checks passed (1 warning)."),
+      ([warn, warn], "All required checks passed (2 warnings)."),
+      ([fail, warn], "1 issue(s) found (1 warning)."),
+      ([fail], "1 issue(s) found."),
+    ]
+    for (checks, expected) in cases {
+      let (console, output, _) = makeConsole()
+      console.show(HealthReport(checks))
+      #expect(output.text.hasSuffix("\n\(expected)\n"), "\(output.text)")
+    }
+  }
+
   @Test("the text report matches the reference layout")
   func text() async {
     let (console, output, _) = makeConsole()

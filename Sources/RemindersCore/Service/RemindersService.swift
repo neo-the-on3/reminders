@@ -7,13 +7,17 @@ import Foundation
 /// the app that holds the permission.
 public struct RemindersService: Sendable {
   public let store: any ReminderStore
+  /// Sections and memberships, which EventKit doesn't have.
+  public let sectionStore: any SectionStore
   public var clock: DayClock
   public var permissions: PermissionGuidance
 
   public init(
-    store: any ReminderStore, clock: DayClock = DayClock(), permissions: PermissionGuidance = .init(host: nil)
+    store: any ReminderStore, sections: any SectionStore = NoSectionStore(), clock: DayClock = DayClock(),
+    permissions: PermissionGuidance = .init(host: nil)
   ) {
     self.store = store
+    self.sectionStore = sections
     self.clock = clock
     self.permissions = permissions
   }
@@ -55,13 +59,24 @@ public struct RemindersService: Sendable {
     ListOverview(try await lists())
   }
 
-  /// `reminders list <name>`: the list's incomplete reminders, then (optionally) its completed ones.
-  public func contents(ofList name: String, includeCompleted: Bool = false) async throws(RemindersError)
-    -> ReminderListing
+  /// `reminders list <name>`: the list's incomplete reminders, then (optionally) its completed ones, each tagged
+  /// with its section. With `section`, only the reminders in that section.
+  ///
+  /// Sections need the section store (on a Mac, Full Disk Access). Without it the list is shown without them,
+  /// unless `section` asks for one.
+  public func contents(ofList name: String, section: String? = nil, includeCompleted: Bool = false)
+    async throws(RemindersError) -> ReminderListing
   {
     let list = try await lists().resolve(name)
     var reminders = try await store.reminders(inLists: [list.id], .incomplete)
     if includeCompleted { reminders += try await store.reminders(inLists: [list.id], .completed) }
+    if let section {
+      let layout = try await sectionLayout(of: list)
+      let wanted = try layout.sections.resolve(section)
+      reminders = layout.tagging(reminders).filter { layout.sectionID(of: $0) == wanted.id }
+      return ReminderListing(reminders, heading: "\(list.title) › \(wanted.displayName)", layout: .list)
+    }
+    if let layout = try? await sectionLayout(of: list) { reminders = layout.tagging(reminders) }
     return ReminderListing(reminders, heading: list.title, layout: .list)
   }
 
@@ -114,11 +129,28 @@ public struct RemindersService: Sendable {
   /// `reminders add`
   public func add(_ request: NewReminderRequest) async throws(RemindersError) -> Confirmation {
     let list = try await lists().resolve(request.list)
+    // Resolve the section first, so a bad name adds nothing.
+    var section: Section?
+    if let name = request.section { section = try await sectionStore.sections(in: list).resolve(name) }
     let id = try await store.createReminder(
       ReminderDraft(
         title: request.title, listID: list.id, dueDate: try request.due.map(parseDueDate), notes: request.notes,
         priority: request.priority, recurrence: try request.repeatRule.map(Recurrence.init(parsing:))))
     var message = "Added \"\(request.title)\" to \"\(list.title)\""
+    if let section {
+      do {
+        try await editMemberships(of: list) { $0.assign(Self.memberID(id), to: section.id, at: clock.now) }
+      } catch {
+        throw RemindersError(
+          error.code,
+          "Added \"\(request.title)\" to \"\(list.title)\", but not to section \"\(section.displayName)\": "
+            + error.message,
+          suggestion:
+            "Run: \(ProductInfo.name) move \"\(list.title)\" \"\(request.title)\" --to-section \"\(section.displayName)\""
+        )
+      }
+      message += " in section \"\(section.displayName)\""
+    }
     if let repeatRule = request.repeatRule { message += " (repeats \(repeatRule))" }
     return Confirmation(message, id: id)
   }
@@ -181,7 +213,7 @@ public struct RemindersService: Sendable {
   }
 
   /// Finds a reminder, complete or not, by title (or ID prefix) in a list.
-  private func find(_ reference: ReminderReference) async throws(RemindersError) -> (ReminderList, Reminder) {
+  func find(_ reference: ReminderReference) async throws(RemindersError) -> (ReminderList, Reminder) {
     let list = try await lists().resolve(reference.list)
     let reminders =
       try await store.reminders(inLists: [list.id], .incomplete)
@@ -215,13 +247,16 @@ public struct NewReminderRequest: Sendable, Hashable {
   public var priority: Priority
   public var notes: String?
   public var repeatRule: String?
+  /// The section to put it in, by name (fuzzy matched).
+  public var section: String?
 
   public init(
     list: String, title: String, due: String? = nil, priority: Priority = .none, notes: String? = nil,
-    repeatRule: String? = nil
+    repeatRule: String? = nil, section: String? = nil
   ) {
     self.list = list
     self.title = title
+    self.section = section
     self.due = due
     self.priority = priority
     self.notes = notes

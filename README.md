@@ -44,9 +44,15 @@ Each CI run on macOS uploads the signed release binary as the `reminders-macos` 
 
 ### Reminders permission
 
-macOS asks once per terminal app (Terminal, iTerm, Cursor, …), not per tool. `reminders authorize` triggers the
-prompt and opens System Settings for anything still missing; `reminders doctor` checks everything without
-prompting. Any other command asks the first time too.
+macOS grants Reminders access to the app you run `reminders` from (Terminal, iTerm, Cursor, or an MCP client such
+as Claude), not to the tool, and asks once per app. `reminders authorize` triggers the prompt and opens System
+Settings for anything still missing; `reminders doctor` checks everything without prompting. Any other command
+asks the first time too. Both name the app macOS asks about. They find it by walking up the parent processes to
+the enclosing `.app` bundle.
+
+macOS only asks once. After access is denied, restricted or set to write-only, re-running `authorize` shows no
+prompt: enable the app under System Settings › Privacy & Security › Reminders (choose Full Access), then restart
+that app. `doctor`, `authorize` and every `PERMISSION_DENIED` error say which of these states applies.
 
 macOS only prompts a command-line tool that carries a usage description, so the linker embeds
 [`Support/Info.plist`](Support/Info.plist) (bundle identifier `io.github.neo-the-on3.reminders` and
@@ -167,9 +173,11 @@ tool. Intentional differences:
   options report `NOT_IMPLEMENTED`, including `list --section` (which the original accepted but ignored). Failed
   EventKit saves and removals report `STORE_FAILURE`. Reminders commands on a platform without Apple Reminders
   report `UNSUPPORTED_PLATFORM`.
-- **Permissions.** `doctor` never shows the permission prompt; it reports access that hasn't been requested yet
-  as `Not requested yet` and points to `authorize`. Write-only access is reported as such and is not enough. In
-  text mode `doctor` exits 1 when a check fails; with `--json` the checks are the result and it exits 0.
+- **Permissions.** `doctor` never shows the permission prompt. It reports each access state separately (not
+  requested yet, denied, restricted, write-only, granted) and names the app that holds the permission; only
+  "not requested yet" points to `authorize`. Write-only access is not enough. A `Permissions app` check shows
+  which app macOS asks about. In text mode `doctor` exits 1 when a check fails; with `--json` the checks are
+  the result and it exits 0.
   `authorize --json` prints the outcome (`remindersAccess`, `databaseAccess`) instead of nothing.
 - **Search** uses Foundation's `localizedStandardContains`, so it ignores diacritics as well as case (`cafe`
   finds `Café`).

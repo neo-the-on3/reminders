@@ -3,28 +3,33 @@ import Foundation
 /// The reminder commands, independent of where reminders live and how results are shown.
 ///
 /// Every operation checks access first: when the user hasn't been asked yet it asks (the system prompt), and any
-/// other answer than full access fails with `PERMISSION_DENIED`.
+/// other answer than full access fails with `PERMISSION_DENIED`, explaining what to do for that state and naming
+/// the app that holds the permission.
 public struct RemindersService: Sendable {
   public let store: any ReminderStore
   public var clock: DayClock
+  public var permissions: PermissionGuidance
 
-  public init(store: any ReminderStore, clock: DayClock = DayClock()) {
+  public init(
+    store: any ReminderStore, clock: DayClock = DayClock(), permissions: PermissionGuidance = .init(host: nil)
+  ) {
     self.store = store
     self.clock = clock
+    self.permissions = permissions
   }
 
-  public static let permissionDenied = RemindersError(
-    .permissionDenied, "Reminders access not granted",
-    suggestion: "Run: reminders authorize (then check System Settings > Privacy & Security > Reminders)")
+  /// Asks for access if the user hasn't decided yet, and returns the resulting access.
+  public func requestAccess() async -> ReminderAccess {
+    let access = await store.accessStatus()
+    guard access == .notDetermined else { return access }
+    // A request that fails (EventKit can, when the host app may not prompt) leaves whatever state macOS recorded.
+    if let answer = try? await store.requestFullAccess() { return answer }
+    return await store.accessStatus()
+  }
 
   public func ensureAccess() async throws(RemindersError) {
-    var access = await store.accessStatus()
-    if access == .notDetermined { access = try await store.requestFullAccess() }
-    switch access {
-    case .fullAccess: return
-    case .unavailable: throw .unsupportedPlatform
-    case .writeOnly, .denied, .restricted, .notDetermined: throw Self.permissionDenied
-    }
+    let access = await requestAccess()
+    guard access == .fullAccess else { throw permissions.error(for: access) }
   }
 
   // MARK: Queries

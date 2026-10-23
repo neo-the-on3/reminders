@@ -172,22 +172,58 @@ struct ServiceAccessTests {
     #expect(await store.accessStatus() == .fullAccess)
   }
 
-  @Test("anything but full access is PERMISSION_DENIED with a hint to authorize")
+  @Test("anything but full access is PERMISSION_DENIED, sending the user to System Settings for the host app")
   func denied() async {
-    for access in [ReminderAccess.denied, .restricted, .writeOnly] {
+    let claude = PermissionGuidance(host: HostApplication(name: "Claude", bundlePath: "/Applications/Claude.app"))
+    let expected: [(ReminderAccess, String, String)] = [
+      (.denied, "Denied for Claude", "Enable Claude in System Settings > Privacy & Security > Reminders"),
+      (.restricted, "Restricted for Claude", "device management or Screen Time"),
+      (.writeOnly, "Write-only for Claude", "Choose Full Access for Claude in System Settings"),
+    ]
+    for (access, status, remedy) in expected {
       do {
-        _ = try await makeService(makeStore(access: access)).dueToday()
+        _ = try await RemindersService(store: makeStore(access: access), clock: utcClock, permissions: claude)
+          .dueToday()
         Issue.record("expected PERMISSION_DENIED for \(access)")
       } catch {
         #expect(error.code == .permissionDenied)
-        #expect(error.suggestion?.contains("reminders authorize") == true)
+        #expect(error.message.contains(status), "\(error.message)")
+        #expect(error.suggestion?.contains(remedy) == true, "\(error.suggestion ?? "")")
+        #expect(error.suggestion?.contains("Run: reminders authorize") == false)
       }
     }
   }
 
-  @Test("a refused prompt is PERMISSION_DENIED")
+  @Test("a refused prompt is PERMISSION_DENIED; without a known host the terminal app is named")
   func refusedPrompt() async {
     let store = InMemoryReminderStore(access: .notDetermined, promptAnswer: .denied)
-    await #expect(throws: RemindersService.permissionDenied) { try await makeService(store).lists() }
+    do {
+      _ = try await makeService(store).lists()
+      Issue.record("expected PERMISSION_DENIED")
+    } catch {
+      #expect(error.code == .permissionDenied)
+      #expect(error.suggestion?.hasPrefix("Enable your terminal app in System Settings") == true)
+    }
+  }
+
+  @Test("a request macOS never answers is PERMISSION_DENIED naming the app that couldn't ask")
+  func unprompted() async {
+    let claude = PermissionGuidance(host: HostApplication(name: "Claude", bundlePath: "/Applications/Claude.app"))
+    let store = InMemoryReminderStore(access: .notDetermined, promptAnswer: .notDetermined)
+    do {
+      _ = try await RemindersService(store: store, clock: utcClock, permissions: claude).lists()
+      Issue.record("expected PERMISSION_DENIED")
+    } catch {
+      #expect(error.code == .permissionDenied)
+      #expect(error.message == "Reminders access not granted (macOS didn't show the prompt for Claude)")
+      #expect(error.suggestion?.hasPrefix("Enable Claude in System Settings > Privacy & Security > Reminders") == true)
+    }
+  }
+
+  @Test("a platform without Reminders is UNSUPPORTED_PLATFORM")
+  func unavailable() async {
+    await #expect(throws: RemindersError.unsupportedPlatform) {
+      try await makeService(makeStore(access: .unavailable)).lists()
+    }
   }
 }

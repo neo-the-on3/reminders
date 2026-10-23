@@ -10,7 +10,7 @@ public struct Diagnostics: Sendable {
 
   /// Runs every check. Never shows the Reminders prompt (it would wait for an answer); `authorize` does that.
   public func checkHealth(includeDatabaseStats: Bool = false, includeSync: Bool = false) async -> HealthReport {
-    var checks = [operatingSystemCheck(), infoPlistCheck(), databaseCheck()]
+    var checks = [operatingSystemCheck(), infoPlistCheck(), hostCheck(), databaseCheck()]
     if includeDatabaseStats {
       checks.append(
         HealthCheck(
@@ -28,38 +28,61 @@ public struct Diagnostics: Sendable {
     return HealthReport(checks)
   }
 
-  /// Asks for Reminders access (the system prompt), checks database access, and opens System Settings for
-  /// whatever is missing, narrating each step to `console`.
+  /// The guidance for this process: who holds the permissions and what to do about each access state.
+  public var permissions: PermissionGuidance { PermissionGuidance(host: system.hostApplication) }
+
+  /// Asks for Reminders access (the system prompt) if the user hasn't decided yet, checks database access, and
+  /// opens System Settings for whatever is missing, narrating each step to `console`.
   public func authorize(narratingTo console: Console) async -> AuthorizationReport {
     let style = console.style
     let name = ProductInfo.name
+    let permissions = permissions
+    let holder = permissions.holder
     console.narrate(
       style("\n\(name) authorize\n", .bold) + console.renderer.rule(20) + "\n\n"
         + style(
           """
-          macOS grants permissions to your terminal app (Terminal, iTerm, Cursor, etc.),
-          not to \(name) directly. You only need to do this once per terminal app.\n
+          macOS grants these permissions to the app you run \(name) from (here: \(holder)),
+          not to \(name) itself. You only need to do this once per app.\n
           """, .dim))
 
     func open(_ pane: SettingsPane, toEnable what: String) {
       console.narrate("     Opening System Settings — \(what).\n")
       if !system.openSettings(pane) { console.narrate(style("     Go to: \(pane.location)\n", .dim)) }
     }
-    let restartHint = style("     After enabling, restart your terminal and run \(name) authorize again.\n", .dim)
 
-    console.narrate(
-      "\n1. Checking Reminders access...\n" + style("   If a system dialog appears, click Allow.\n", .dim))
-    var access = await service.store.accessStatus()
-    do {
-      let count = try await service.lists().count
-      access = .fullAccess
+    console.narrate("\n1. Checking Reminders access...\n")
+    let before = await service.store.accessStatus()
+    if before == .notDetermined {
+      console.narrate(style("   If a system dialog appears, click Allow.\n", .dim))
+    }
+    var access = await service.requestAccess()
+    var listCount: Int?
+    if access == .fullAccess {
+      do {
+        listCount = try await service.lists().count
+      } catch {
+        access = await service.store.accessStatus()
+      }
+    }
+    switch access {
+    case .fullAccess:
+      let count = listCount ?? 0
       console.narrate(
         "   \(style("✓", .green)) Reminders access granted (\(count) list\(count == 1 ? "" : "s") found)\n")
-    } catch {
-      access = await service.store.accessStatus()
-      console.narrate(style("   ✗ Reminders access not granted.\n", .yellow))
-      open(.reminders, toEnable: "enable your terminal app under Reminders")
-      console.narrate(restartHint)
+    case .unavailable:
+      console.narrate(style("   ✗ Apple Reminders is not available on this platform.\n", .yellow))
+    case .notDetermined:
+      console.narrate(
+        style("   ✗ macOS didn't show the Reminders prompt for \(holder).\n", .yellow)
+          + "     \(permissions.unpromptedRemedy).\n")
+    case .denied, .restricted, .writeOnly:
+      console.narrate(style("   ✗ Reminders access: \(permissions.status(of: access) ?? "").\n", .yellow))
+      if before != .notDetermined {
+        console.narrate("     macOS won't show the prompt again; only System Settings can change this.\n")
+      }
+      console.narrate("     \(permissions.remedy(for: access) ?? "").\n")
+      open(.reminders, toEnable: "enable \(holder) under Reminders")
     }
 
     console.narrate("\n2. Checking database access (for section features)...\n")
@@ -70,11 +93,11 @@ public struct Diagnostics: Sendable {
     } else {
       console.narrate(
         style("   ✗ Database access not yet granted.\n", .yellow)
-          + "     Section features (create-section, move, etc.) need Full Disk Access.\n")
-      open(.fullDiskAccess, toEnable: "add your terminal app to Full Disk Access")
-      console.narrate(restartHint)
+          + "     Section features (create-section, move, etc.) need Full Disk Access for \(holder).\n")
+      open(.fullDiskAccess, toEnable: "add \(holder) to Full Disk Access")
+      console.narrate(style("     After enabling, restart \(holder) and run \(name) doctor.\n", .dim))
     }
-    return AuthorizationReport(remindersAccess: access, databaseAccess: database != nil)
+    return AuthorizationReport(remindersAccess: access, databaseAccess: database != nil, host: system.hostApplication)
   }
 
   // MARK: Checks
@@ -99,8 +122,19 @@ public struct Diagnostics: Sendable {
     return HealthCheck("Info.plist", .ok, "Embedded (\(plist["CFBundleIdentifier"] ?? "no identifier"))")
   }
 
+  /// Which app macOS asks about, so the user knows what to look for in System Settings.
+  private func hostCheck() -> HealthCheck {
+    guard let host = system.hostApplication else {
+      return HealthCheck(
+        "Permissions app", .warn, "Unknown",
+        detail: "macOS attributes permissions to the app that started \(ProductInfo.name)")
+    }
+    return HealthCheck("Permissions app", .ok, host.name, detail: host.bundlePath)
+  }
+
   private func databaseCheck() -> HealthCheck {
-    let hint = "Run: \(ProductInfo.name) authorize (section features need Full Disk Access for your terminal app)"
+    let hint =
+      "Run: \(ProductInfo.name) authorize (section features need Full Disk Access for \(permissions.holder))"
     do {
       guard let first = try system.remindersDatabaseFiles().first else {
         return HealthCheck(
@@ -114,23 +148,16 @@ public struct Diagnostics: Sendable {
   }
 
   private func accessCheck() async -> HealthCheck {
-    let hint = "Run: \(ProductInfo.name) authorize"
-    switch await service.store.accessStatus() {
-    case .notDetermined:
-      return HealthCheck("Reminders access", .fail, "Not requested yet", detail: hint)
-    case .fullAccess:
-      do {
-        let count = try await service.lists().count
-        return HealthCheck("Reminders access", .ok, "Granted (\(count) list\(count == 1 ? "" : "s"))")
-      } catch {
-        return HealthCheck("Reminders access", .fail, "Error: \(error.message)", detail: hint)
-      }
-    case .writeOnly:
-      return HealthCheck("Reminders access", .fail, "Write-only (full access needed)", detail: hint)
-    case .denied, .restricted:
-      return HealthCheck("Reminders access", .fail, "Not granted", detail: hint)
-    case .unavailable:
-      return HealthCheck("Reminders access", .fail, "Apple Reminders is not available on this platform")
+    let access = await service.store.accessStatus()
+    guard access == .fullAccess else {
+      return HealthCheck(
+        "Reminders access", .fail, permissions.status(of: access) ?? "", detail: permissions.remedy(for: access))
+    }
+    do {
+      let count = try await service.lists().count
+      return HealthCheck("Reminders access", .ok, "Granted (\(count) list\(count == 1 ? "" : "s"))")
+    } catch {
+      return HealthCheck("Reminders access", .fail, "Error: \(error.message)", detail: error.suggestion)
     }
   }
 }

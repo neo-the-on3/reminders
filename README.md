@@ -31,6 +31,29 @@ MISE_USE_VERSIONS_HOST=0 mise install
 
 To make that permanent: `mise settings use_versions_host=false`.
 
+## Install
+
+```sh
+brew install neo-the-on3/tap/reminders
+reminders authorize
+```
+
+This is an **alpha** pre-release: lists and reminders work, sections don't yet (see the status above). It needs
+macOS 26 or later and runs natively on Apple silicon and Intel (a universal binary).
+
+- The binary is **ad-hoc signed, not notarized**. Homebrew doesn't quarantine what it downloads, so macOS runs it
+  without a Gatekeeper prompt. A copy downloaded by a browser may be blocked; remove the quarantine flag with
+  `xattr -d com.apple.quarantine reminders`.
+- The **first run asks for Reminders access**. Run under an MCP client such as Claude Desktop, the prompt and
+  the System Settings entry say `reminders`. Run from Terminal, they name the terminal app (see
+  [Reminders permission](#reminders-permission)). `reminders authorize` triggers the prompt on purpose.
+- For an MCP client, use the absolute path from `brew --prefix`, such as `/opt/homebrew/bin/reminders --mcp`
+  (see [MCP server](#mcp-server)).
+
+Releases are built by [`.github/workflows/release.yml`](.github/workflows/release.yml) from `v*` tags. Each one
+has `reminders-<version>-macos-universal.tar.gz` (the binary, LICENSE and README) and its `.sha256`. The formula
+lives in [neo-the-on3/homebrew-tap](https://github.com/neo-the-on3/homebrew-tap).
+
 ## Build and run
 
 ```sh

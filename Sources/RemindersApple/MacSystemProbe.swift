@@ -57,8 +57,13 @@ public struct MacSystemProbe: SystemProbe {
 
   public var hostApplication: HostApplication? {
     #if os(macOS)
-      HostApplication.enclosing(
-        pid: getpid(), lookup: Self.processRecord(_:), displayName: Self.bundleDisplayName(_:))
+      let pid = getpid()
+      let tool = ToolProcess(
+        pid: pid, executablePath: Self.processRecord(pid)?.executablePath ?? CommandLine.arguments[0],
+        responsiblePID: Self.responsiblePID(of: pid), carriesUsageDescription: embeddedInfoPlist != nil)
+      return HostApplication.responsible(
+        for: tool, lookup: Self.processRecord(_:), displayName: Self.bundleDisplayName(_:),
+        declaresRemindersUsage: Self.declaresRemindersUsage(_:))
     #else
       nil
     #endif
@@ -96,6 +101,23 @@ public struct MacSystemProbe: SystemProbe {
       let bytes = buffer.prefix(Int(length)).map { UInt8(bitPattern: $0) }
       guard let path = String(bytes: bytes, encoding: .utf8) else { return nil }
       return ProcessRecord(pid: pid, parentPID: info.kp_eproc.e_ppid, executablePath: path)
+    }
+
+    /// The process macOS attributes `pid`'s privacy permissions to, from libsystem's
+    /// `responsibility_get_pid_responsible_for_pid`. It isn't in the SDK headers, so it's looked up at run time;
+    /// nil when it's missing or fails.
+    static func responsiblePID(of pid: Int32) -> Int32? {
+      typealias Responsible = @convention(c) (pid_t) -> pid_t
+      guard let symbol = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "responsibility_get_pid_responsible_for_pid")
+      else { return nil }
+      let responsible = unsafeBitCast(symbol, to: Responsible.self)(pid)
+      return responsible > 0 ? responsible : nil
+    }
+
+    /// Whether the app declares why it uses Reminders, without which macOS never asks about it.
+    static func declaresRemindersUsage(_ path: String) -> Bool {
+      let info = Bundle(path: path)?.infoDictionary ?? [:]
+      return ["NSRemindersFullAccessUsageDescription", "NSRemindersUsageDescription"].contains { info[$0] != nil }
     }
 
     /// The bundle's `CFBundleDisplayName` or `CFBundleName`, such as "Visual Studio Code" for `Code.app`.

@@ -12,6 +12,7 @@ let package = Package(
   products: [
     .executable(name: "remi", targets: ["RemiCLI"]),
     .library(name: "RemiCore", targets: ["RemiCore"]),
+    .library(name: "RemindersCore", targets: ["RemindersCore"]),
   ],
   dependencies: [
     .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.8.2")
@@ -33,6 +34,9 @@ let package = Package(
         .product(name: "ArgumentParser", package: "swift-argument-parser"),
       ]
     ),
+    // Domain model, parsing, matching, presentation and section-sync bookkeeping. Foundation only.
+    .target(name: "RemindersCore"),
+    .testTarget(name: "RemindersCoreTests", dependencies: ["RemindersCore"]),
     .testTarget(
       name: "RemiCoreTests",
       dependencies: ["RemiCore"]

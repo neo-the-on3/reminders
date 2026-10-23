@@ -7,7 +7,9 @@ included:
   - scripts
 excluded:
   - .build
-  # Generated from remi / chrono-node by scripts/*: regenerate rather than edit
+  # Generated or captured test data: regenerate rather than edit
+  - Tests/RemindersCoreTests/DateReferenceCases.swift
+  - Tests/RemindersCoreTests/RenderingFixtures.swift
   - Tests/RemiCoreTests/ChronoFixtures.swift
   - Tests/RemiCoreTests/OutputFixtures.swift
 
@@ -29,8 +31,6 @@ disabled_rules:
   - function_name_whitespace
   - return_arrow_whitespace
   - line_length  # swift-format enforces lineLength (120); string literals it cannot wrap are allowed
-  # --- Deliberate for a faithful port ---
-  - identifier_name  # remi's short names (s, q, h, d) kept for side-by-side review with the TypeScript
 
 opt_in_rules:
   - array_init
@@ -57,6 +57,11 @@ function_body_length:
 cyclomatic_complexity:
   warning: 20
   error: 30
+identifier_name:
+  # Short names are idiomatic in small scopes (`lhs`/`rhs`-style operands, loop indices, parser tokens);
+  # the rule still enforces lowerCamelCase.
+  min_length: 1
+  max_length: 50
 large_tuple:
   warning: 3
   error: 4

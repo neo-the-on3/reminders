@@ -34,6 +34,15 @@ struct CommandLineTests {
     }
   }
 
+  @Test("--priority lists its values once in add and update help")
+  func priorityHelp() {
+    for command in [Add.self, Update.self] as [any ParsableCommand.Type] {
+      let help = RemindersCommand.helpMessage(for: command, columns: 200)
+      #expect(help.components(separatedBy: "medium").count == 2, "\(command)")
+      #expect(help.contains("(values: none, low, medium, high"), "\(command)")
+    }
+  }
+
   @Test("demo is hidden from help and from completions alike")
   func hiddenDemo() {
     #expect(!RemindersCommand.helpMessage().contains("demo"))

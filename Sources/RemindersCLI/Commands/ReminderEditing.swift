@@ -18,7 +18,7 @@ struct Add: ConsoleCommand {
   @Argument(help: "Reminder title") var title: String
   @Option(help: "Add to a specific section") var section: String?
   @Option(help: "Due date: YYYY-MM-DD or natural language (\"tomorrow\", \"next friday\")") var due: String?
-  @Option(help: "Priority: none, low, medium, high") var priority: Priority = .none
+  @Option(help: "Priority") var priority: Priority = .none
   @Option(help: "Reminder notes") var notes: String?
   @Option(help: "Recurrence: \"daily\", \"weekly\", \"every 2 weeks\", \"every 3 months\"") var `repeat`: String?
 
@@ -49,7 +49,7 @@ struct Update: ConsoleCommand {
   @Option(name: .customLong("title"), help: "New title") var newTitle: String?
   @Option(help: "New due date: YYYY-MM-DD or natural language") var due: String?
   @Flag(help: "Remove due date") var clearDue = false
-  @Option(help: "New priority: none, low, medium, high") var priority: Priority?
+  @Option(help: "New priority") var priority: Priority?
   @Option(help: "New notes") var notes: String?
 
   func run(in context: CommandContext) async throws {

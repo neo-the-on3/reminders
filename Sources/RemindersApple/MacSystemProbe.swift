@@ -1,6 +1,10 @@
 import Foundation
 import RemindersCore
 
+#if os(macOS)
+  import Darwin
+#endif
+
 /// The real ``SystemProbe``. Off macOS it knows no version, no Info.plist and can't open anything.
 public struct MacSystemProbe: SystemProbe {
   public init() {}
@@ -51,6 +55,15 @@ public struct MacSystemProbe: SystemProbe {
     return names.filter { $0.hasSuffix(".sqlite") }.sorted().map { "\(directory)/\($0)" }
   }
 
+  public var hostApplication: HostApplication? {
+    #if os(macOS)
+      HostApplication.enclosing(
+        pid: getpid(), lookup: Self.processRecord(_:), displayName: Self.bundleDisplayName(_:))
+    #else
+      nil
+    #endif
+  }
+
   public func openSettings(_ pane: SettingsPane) -> Bool {
     #if os(macOS)
       let process = Process()
@@ -68,3 +81,28 @@ public struct MacSystemProbe: SystemProbe {
     #endif
   }
 }
+
+#if os(macOS)
+  extension MacSystemProbe {
+    /// The process's parent (via `sysctl(KERN_PROC_PID)`) and executable path (via `proc_pidpath`).
+    static func processRecord(_ pid: Int32) -> ProcessRecord? {
+      var info = kinfo_proc()
+      var size = MemoryLayout<kinfo_proc>.stride
+      var name: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, pid]
+      guard sysctl(&name, UInt32(name.count), &info, &size, nil, 0) == 0, size > 0 else { return nil }
+      var buffer = [CChar](repeating: 0, count: 4 * Int(MAXPATHLEN))
+      let length = proc_pidpath(pid, &buffer, UInt32(buffer.count))
+      guard length > 0 else { return nil }
+      let bytes = buffer.prefix(Int(length)).map { UInt8(bitPattern: $0) }
+      guard let path = String(bytes: bytes, encoding: .utf8) else { return nil }
+      return ProcessRecord(pid: pid, parentPID: info.kp_eproc.e_ppid, executablePath: path)
+    }
+
+    /// The bundle's `CFBundleDisplayName` or `CFBundleName`, such as "Visual Studio Code" for `Code.app`.
+    static func bundleDisplayName(_ path: String) -> String? {
+      guard let bundle = Bundle(path: path) else { return nil }
+      let info = bundle.localizedInfoDictionary ?? bundle.infoDictionary ?? [:]
+      return (info["CFBundleDisplayName"] as? String) ?? (info["CFBundleName"] as? String)
+    }
+  }
+#endif

@@ -9,6 +9,8 @@ public protocol SystemProbe: Sendable {
   func remindersDataDirectoryExists() -> Bool
   /// Paths of the Reminders `.sqlite` databases. Throws when the directory can't be read (no Full Disk Access).
   func remindersDatabaseFiles() throws(RemindersError) -> [String]
+  /// The app macOS attributes this process's permissions to; nil when no app launched it.
+  var hostApplication: HostApplication? { get }
   /// Opens a System Settings pane; false when that failed.
   func openSettings(_ pane: SettingsPane) -> Bool
 }

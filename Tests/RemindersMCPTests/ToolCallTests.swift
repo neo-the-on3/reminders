@@ -23,8 +23,8 @@ struct ToolCallTests {
     #expect(try await session.titles("reminders_today") == ["Buy milk"])
     #expect(try await session.titles("reminders_overdue") == ["Buy bread"])
     #expect(
-      Set(try await session.titles("reminders_upcoming", ["days": 1])) == ["Buy milk", "Buy bread", "Write report"])
-    #expect(try await session.titles("reminders_upcoming").count == 4)
+      Set(try await session.titles("reminders_upcoming", ["days": 1])) == ["Buy milk", "Write report"])
+    #expect(try await session.titles("reminders_upcoming").count == 3)
     #expect(try await session.titles("reminders_search", ["query": "QUARTERLY"]) == ["Write report"])
 
     for (name, arguments) in [
@@ -120,7 +120,7 @@ struct ToolCallTests {
       #expect(error.message.contains(message), "\(name): \(error.message)")
     }
     // Whole doubles are accepted as integers; null means absent.
-    #expect(try await session.titles("reminders_upcoming", ["days": 1.0]).count == 3)
+    #expect(try await session.titles("reminders_upcoming", ["days": 1.0]).count == 2)
     #expect(try await session.titles("reminders_list", ["list": "Work", "includeCompleted": .null]).count == 2)
     await session.stop()
   }

@@ -75,7 +75,9 @@ public enum ReminderTool: String, CaseIterable, Sendable {
     case .move: "Move a reminder to a different section (not implemented yet)"
     case .today: "Show incomplete reminders due today"
     case .overdue: "Show incomplete reminders due before today"
-    case .upcoming: "Show incomplete reminders due within the next N days, including overdue ones"
+    case .upcoming:
+      "Show incomplete reminders due from today through today + N days. Excludes overdue reminders; use "
+        + "reminders_overdue for those"
     case .search: "Search incomplete reminders across all lists by title and notes (ignores case)"
     }
   }
@@ -134,7 +136,9 @@ public enum ReminderTool: String, CaseIterable, Sendable {
         ["list": Self.listArgument, "title": Self.titleArgument, "toSection": Self.sectionArgument],
         required: ["list", "title", "toSection"])
     case .upcoming:
-      return JSONSchema.object(["days": JSONSchema.integer("Number of days to look ahead (default: 7)")])
+      return JSONSchema.object([
+        "days": JSONSchema.integer("Days to look ahead after today (default: 7; 0 = today only)")
+      ])
     case .search:
       return JSONSchema.object(
         ["query": JSONSchema.string("Text to find in titles and notes")], required: ["query"])

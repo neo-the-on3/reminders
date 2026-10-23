@@ -68,9 +68,32 @@ struct ServiceQueryTests {
     #expect(try await service.dueToday().reminders.map(\.id) == ["G1"])
     #expect(try await service.overdue().reminders.map(\.id) == ["G2"])
     let week = try await service.upcoming(days: 7)
-    #expect(week.heading == "Due in next 7 days")
-    #expect(Set(week.reminders.map(\.id)) == ["G1", "G2", "W1", "W2"])
-    #expect(Set(try await service.upcoming(days: 1).reminders.map(\.id)) == ["G1", "G2", "W1"])
+    #expect(week.heading == "Due today and the next 7 days")
+    #expect(try await service.upcoming(days: 0).heading == "Due today")
+    #expect(try await service.upcoming(days: 1).heading == "Due today or tomorrow")
+    #expect(Set(week.reminders.map(\.id)) == ["G1", "W1", "W2"])
+    #expect(Set(try await service.upcoming(days: 1).reminders.map(\.id)) == ["G1", "W1"])
+  }
+
+  @Test("upcoming runs from today through today + N days, without overdue reminders", arguments: [0, 1, 6])
+  func upcomingBoundaries(days: Int) async throws {
+    let today = utcClock.today
+    let due = [
+      ("yesterday", today.adding(days: -1)), ("today", today), ("last day", today.adding(days: days)),
+      ("day after", today.adding(days: days + 1)),
+    ]
+    let store = InMemoryReminderStore(
+      lists: [ReminderList(id: "L", title: "Inbox")],
+      reminders: due.map { Reminder(id: $0.0, title: $0.0, listID: "L", listName: "Inbox", dueDate: $0.1) },
+      now: { referenceInstant })
+    let upcoming = try await makeService(store).upcoming(days: days)
+    #expect(Set(upcoming.reminders.map(\.id)) == ["today", "last day"])
+    #expect(try await makeService(store).overdue().reminders.map(\.id) == ["yesterday"])
+  }
+
+  @Test("upcoming rejects a negative number of days")
+  func upcomingNegative() async throws {
+    await #expect(throws: RemindersError.self) { try await makeService(makeStore()).upcoming(days: -1) }
   }
 
   @Test("search matches titles and notes, ignoring case, incomplete only")

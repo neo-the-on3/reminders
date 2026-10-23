@@ -147,7 +147,7 @@ Each tool runs the same operation as the CLI command, with the same name matchin
 | `reminders_lists` | — | `{"lists": [list]}` |
 | `reminders_list` | `list`, `includeCompleted?` | `{"reminders": [reminder]}` |
 | `reminders_today`, `reminders_overdue` | — | `{"reminders": [reminder]}` |
-| `reminders_upcoming` | `days?` (default 7) | `{"reminders": [reminder]}` |
+| `reminders_upcoming` | `days?` (default 7; due today through today + N, no overdue) | `{"reminders": [reminder]}` |
 | `reminders_search` | `query` | `{"reminders": [reminder]}` |
 | `reminders_add` | `list`, `title`, `due?`, `priority?`, `notes?`, `repeat?`, `section?`* | `{"message", "id"}` |
 | `reminders_complete` | `list`, `title` or `id` | `{"message"}` |
@@ -247,6 +247,10 @@ tool. Intentional differences:
   rejected with `INVALID_ARGUMENT`. Compared with the reference parser, `day after tomorrow` means +2 days,
   `tues` is accepted, `this week` is rejected, and impossible dates such as `2026-02-30` are rejected instead of
   being passed through.
+- **`upcoming` starts today.** `upcoming --days N` (and `reminders_upcoming`) lists incomplete reminders due from
+  today through today + N days, both included; `--days 0` is today only. Overdue reminders are left to `overdue`,
+  so "what's coming up" never answers with something already late. The original also included everything
+  overdue. A negative `--days` is `INVALID_ARGUMENT`.
 - **Usage errors exit 64.** A non-numeric `upcoming --days`, an unknown `--priority`, or an unsupported shell for
   `completions` is reported by the argument parser with exit status 64.
 - **Error codes.** Unknown sections report `SECTION_NOT_FOUND` (not `LIST_NOT_FOUND`). Unported commands and

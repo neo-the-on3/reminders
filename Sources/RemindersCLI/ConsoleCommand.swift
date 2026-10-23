@@ -1,4 +1,5 @@
 import ArgumentParser
+import RemindersApple
 import RemindersCore
 
 /// Flags every command accepts, before or after the command name (`reminders --json lists`, `reminders lists --json`).
@@ -10,22 +11,41 @@ struct GlobalOptions: ParsableArguments {
   var verbose = false
 }
 
+/// What a command works with: where output goes, the reminder operations and the machine facts.
+struct CommandContext: Sendable {
+  var console: Console
+  var service: RemindersService
+  var system: any SystemProbe
+
+  /// The real thing: stdout/stderr, the platform's Reminders store and this machine.
+  static func live(_ globals: GlobalOptions) -> CommandContext {
+    CommandContext(
+      console: .standard(format: globals.json ? .json : .text, verbose: globals.verbose),
+      service: RemindersService(store: RemindersPlatform.makeStore()),
+      system: RemindersPlatform.makeSystemProbe())
+  }
+}
+
 /// A subcommand that reports through a ``Console``: results in the requested format, and any ``RemindersError``
 /// as a structured failure with exit status 1.
 protocol ConsoleCommand: AsyncParsableCommand {
   var globals: GlobalOptions { get }
-  func run(on console: Console) async throws
+  func run(in context: CommandContext) async throws
 }
 
 extension ConsoleCommand {
   func run() async throws {
-    let console = Console.standard(format: globals.json ? .json : .text, verbose: globals.verbose)
+    try await execute(in: .live(globals))
+  }
+
+  /// Runs the command, reporting failures on the context's console.
+  func execute(in context: CommandContext) async throws {
     do {
-      try await run(on: console)
+      try await run(in: context)
     } catch let exit as ExitCode {
       throw exit
     } catch {
-      console.report(RemindersError(wrapping: error))
+      context.console.report(RemindersError(wrapping: error))
       throw ExitCode.failure
     }
   }

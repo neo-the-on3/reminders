@@ -6,8 +6,8 @@ struct CreateList: ConsoleCommand {
   @OptionGroup var globals: GlobalOptions
   @Argument(help: "Name of the new list") var name: String
 
-  func run(on console: Console) async throws {
-    throw RemindersError.notImplemented("create-list")
+  func run(in context: CommandContext) async throws {
+    context.console.show(try await context.service.createList(named: name))
   }
 }
 
@@ -17,7 +17,12 @@ struct DeleteList: ConsoleCommand {
   @Argument(help: "List name (fuzzy matched)") var name: String
   @Flag(help: "Confirm deletion (required unless --json)") var confirm = false
 
-  func run(on console: Console) async throws {
-    throw RemindersError.notImplemented("delete-list")
+  func run(in context: CommandContext) async throws {
+    guard confirm || context.console.isJSON else {
+      throw RemindersError(
+        .invalidArgument, "List deletion requires --confirm flag",
+        suggestion: "Run: \(ProductInfo.name) delete-list \"\(name)\" --confirm")
+    }
+    context.console.show(try await context.service.deleteList(named: name))
   }
 }

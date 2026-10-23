@@ -54,7 +54,8 @@ public struct TextRenderer: Sendable {
     if let heading {
       let overdue = reminders.count(where: clock.isOverdue)
       var summary = ["\(reminders.count) reminder\(reminders.count == 1 ? "" : "s")"]
-      if overdue > 0 { summary.append(style("\(overdue) overdue", .red)) }
+      // Everything under "Overdue" is overdue, so the count would only repeat the total.
+      if overdue > 0 && layout.context != .overdue { summary.append(style("\(overdue) overdue", .red)) }
       text += style("\n\(heading)", .bold) + style(" (\(summary.joined(separator: ", ")))\n", .dim)
       text += rule(heading.terminalWidth + 2) + "\n"
     }

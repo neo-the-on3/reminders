@@ -98,13 +98,14 @@ public struct SetupEnvironment: Sendable {
     self.now = now
   }
 
-  /// This process: its home (`$HOME`, like other command-line tools), its directory, its binary and its `PATH`.
+  /// This process: its home (`$HOME`, like other command-line tools), its directory, its binary and its `PATH`,
+  /// with paths resolved through symlinks so they all print in one form.
   public static func live() -> SetupEnvironment {
     let manager = FileManager.default
     let environment = ProcessInfo.processInfo.environment
     let home = environment["HOME"].flatMap { $0.hasPrefix("/") ? $0 : nil } ?? manager.homeDirectoryForCurrentUser.path
     return SetupEnvironment(
-      homeDirectory: home, currentDirectory: manager.currentDirectoryPath,
+      homeDirectory: PhysicalPath.of(home), currentDirectory: PhysicalPath.of(manager.currentDirectoryPath),
       binaryPath: ExecutableLocation.runningBinary().map {
         ExecutableLocation.stablePath(forResolved: $0, exists: manager.fileExists(atPath:))
       },
@@ -131,10 +132,12 @@ public struct MCPSetup: Sendable {
     "\(project ?? home)/.cursor/mcp.json"
   }
 
-  /// Edits the JSON config at `path` for `client` (Claude Desktop or Cursor).
+  /// Edits the JSON config at `path` for `client` (Claude Desktop or Cursor). The report and any error name the
+  /// file by its physical path (see ``PhysicalPath``), the form the backup and the server's command take too.
   public func configure(_ client: MCPClient, at path: String, _ options: SetupOptions) throws(RemindersError)
     -> SetupReport
   {
+    let path = PhysicalPath.of(path)
     let entry = try serverEntry(type: client == .cursor ? "stdio" : nil)
     let document = try MCPConfigDocument(try ConfigFile.read(path), path: path)
     let edit =

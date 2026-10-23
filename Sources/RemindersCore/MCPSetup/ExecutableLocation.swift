@@ -2,9 +2,10 @@ import Foundation
 
 /// Where the running `reminders` binary is, as a path that keeps working in a client's config.
 public enum ExecutableLocation {
-  /// The running binary's absolute path with symlinks resolved, or nil when the system doesn't say.
+  /// The running binary's absolute path with symlinks resolved (see ``PhysicalPath``), or nil when the system
+  /// doesn't say.
   public static func runningBinary() -> String? {
-    Bundle.main.executableURL.map { $0.resolvingSymlinksInPath().path }
+    Bundle.main.executableURL.map { PhysicalPath.of($0.path) }
   }
 
   /// The path to write into a config for the binary at `resolved` (symlinks already resolved).

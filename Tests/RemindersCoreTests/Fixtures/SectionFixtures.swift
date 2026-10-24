@@ -1,7 +1,7 @@
-// Section data as Reminders stores it on a list.
-//
-// SYNTHETIC: these values follow the documented formats of Reminders' membership data
-// (MembershipsOfRemindersInSectionsAsData) and resolution token map.
+// Section memberships in Reminders' format (MembershipsOfRemindersInSectionsAsData), the form the section store
+// hands them to the service in. The shape (key names and order, upper-case dashed UUIDs, `modifiedOn` in seconds
+// since 2001) is the one Reminders stored on a Mac with iCloud (macOS 27.0.1, checked in #13 and #24); the
+// identifiers and names here are made up.
 
 import Foundation
 

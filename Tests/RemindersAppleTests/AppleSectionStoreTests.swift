@@ -223,6 +223,7 @@ struct AppleSectionStoreTests {
         == true)
   }
 
+  // The README's known limitation: no ReminderKit getter tells a stored oldest-first order from none at all.
   @Test("a stored order that happens to be oldest first is shown newest first (the documented edge case)")
   func storedOldestFirst() async throws {
     let oldestFirst = Self.scratchAsFetched.sorted { ($0.createdAt ?? .distantPast) < ($1.createdAt ?? .distantPast) }

@@ -54,8 +54,10 @@
       try withSession { session throws(RemindersError) in try session.createSection(named: name, in: list) }
     }
 
-    public func deleteSection(id: String, in list: ReminderList) throws(RemindersError) {
-      try withSession { session throws(RemindersError) in try session.deleteSection(id: id, in: list) }
+    public func deleteSection(id: String, in list: ReminderList, clearing members: [String]) throws(RemindersError) {
+      try withSession { session throws(RemindersError) in
+        try session.deleteSection(id: id, in: list, clearing: members)
+      }
     }
 
     public func assign(reminderID: String, toSectionID sectionID: String, in list: ReminderList)
@@ -371,15 +373,28 @@
       return section
     }
 
-    func deleteSection(id: String, in list: ReminderList) throws(RemindersError) {
-      let storage = try storage(of: list).list
+    /// Deletes the section and, in the same save, takes `members` (the reminders in it) out of it.
+    ///
+    /// Reminders merges the memberships a change hands it into the stored ones, newest per reminder winning, and
+    /// keeps a deleted section's memberships (for undo). Left alone, they'd stay in the list's data pointing at a
+    /// section that's gone. Each member gets an obsolete membership instead, which is how ReminderKit records "in
+    /// no section"; leaving members out of the change wouldn't remove anything from a merge.
+    func deleteSection(id: String, in list: ReminderList, clearing members: [String]) throws(RemindersError) {
+      let (storage, account) = try storage(of: list)
       guard let section = try sections(of: storage).first(where: { Runtime.identifier(of: $0) == id.uppercased() })
       else {
         throw RemindersError(.sectionNotFound, "ReminderKit has no section \(id) in \"\(list.title)\"")
       }
-      step("delete section: \(Runtime.className(section)) \(id.uppercased())")
+      guard let group = UUID(uuidString: id) else {
+        throw RemindersError(.invalidArgument, "Not a section identifier: \(id)")
+      }
+      step("delete section: \(Runtime.className(section)) \(group.uuidString)")
+      // Everything is built and checked before the one save at the end; a failure on the way saves nothing.
+      var obsolete: [NSObject] = []
+      for case let member? in members.map(UUID.init(uuidString:)) {
+        obsolete.append(try Runtime.membership(member: member, group: group, isObsolete: true, modifiedOn: Date()))
+      }
       let request = try saveRequest()
-      // Everything the deletion needs is checked before it's staged; nothing is saved until the one save at the end.
       try Runtime.require(["updateListSection:"], on: request)
       // A tracked change, so the deletion syncs; removing the object alone wouldn't.
       guard let change = try Runtime.send("updateListSection:", to: request, section) else {
@@ -389,6 +404,10 @@
       try Runtime.require(["removeFromList"], on: change)
       _ = try Runtime.send("removeFromList", to: change)
       step("removeFromList")
+      if !obsolete.isEmpty {
+        try stageMemberships(obsolete, request: request, storage: storage, account: account, for: "delete the section")
+        step("setUnsavedMembershipsOfRemindersInSections: \(obsolete.count) obsolete (\(group.uuidString))")
+      }
       try save(request, "delete the section from \"\(list.title)\"")
     }
   }

@@ -21,8 +21,9 @@ public protocol ReminderKitBridge: Sendable {
   func manualReminderOrder(in list: ReminderList) throws(RemindersError) -> ReminderKitRead<[String]?>?
   /// Creates a section and returns it.
   func createSection(named name: String, in list: ReminderList) throws(RemindersError) -> ReminderKitSection
-  /// Deletes the section with identifier `id`.
-  func deleteSection(id: String, in list: ReminderList) throws(RemindersError)
+  /// Deletes the section with identifier `id` and, in the same save, takes `members` (reminder identifiers) out
+  /// of it, so no membership is left pointing at a section that's gone.
+  func deleteSection(id: String, in list: ReminderList, clearing members: [String]) throws(RemindersError)
   /// Puts the reminder with identifier `reminderID` in the section `sectionID` (both upper-case dashed UUIDs),
   /// taking it out of any other section.
   func assign(reminderID: String, toSectionID sectionID: String, in list: ReminderList) throws(RemindersError)

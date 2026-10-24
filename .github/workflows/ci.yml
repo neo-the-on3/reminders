@@ -57,10 +57,10 @@ jobs:
           grep -q '"code" : "UNSUPPORTED_PLATFORM"' err.json
       - name: MCP smoke test (stdio)
         run: |
-          scripts/mcp-session.sh "" reminders_move '{"list":"Inbox","title":"Milk","toSection":"Later"}' reminders_lists '{}' | tee mcp.jsonl
+          scripts/mcp-session.sh "" reminders_move '{"list":"Inbox","title":"Milk"}' reminders_lists '{}' | tee mcp.jsonl
           test "$(wc -l < mcp.jsonl)" -eq 4
           test "$(grep -o '"name":"reminders_[a-z_]*"' mcp.jsonl | wc -l)" -eq 16
-          grep -q 'NOT_IMPLEMENTED' mcp.jsonl
+          grep -q 'INVALID_ARGUMENT' mcp.jsonl
           grep -q 'UNSUPPORTED_PLATFORM' mcp.jsonl
 
   macos:
@@ -114,10 +114,10 @@ jobs:
           grep -q "Deletion requires --confirm flag" err.txt
       - name: MCP smoke test (stdio; no store calls, the runner has no Reminders permission)
         run: |
-          scripts/mcp-session.sh .build/release/reminders reminders_move '{"list":"Inbox","title":"Milk","toSection":"Later"}' | tee mcp.jsonl
+          scripts/mcp-session.sh .build/release/reminders reminders_move '{"list":"Inbox","title":"Milk"}' | tee mcp.jsonl
           test "$(wc -l < mcp.jsonl)" -eq 3
           test "$(grep -o '"name":"reminders_[a-z_]*"' mcp.jsonl | wc -l)" -eq 16
-          grep -q 'NOT_IMPLEMENTED' mcp.jsonl
+          grep -q 'INVALID_ARGUMENT' mcp.jsonl
       - name: Doctor (informational; the runner has no Reminders permission)
         continue-on-error: true
         run: |

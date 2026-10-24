@@ -11,11 +11,19 @@ public actor InMemorySectionStore: SectionStore {
   public private(set) var assignments: [(listID: String, reminderID: String, sectionID: String)] = []
   /// When set, the next assignment fails with it.
   private var assignmentFailure: RemindersError?
+  /// Manual reminder orders by list identifier.
+  public private(set) var manualOrders: [String: [String]]
 
-  public init(sections: [String: [Section]] = [:], memberships: [String: StoredMemberships] = [:]) {
+  public init(
+    sections: [String: [Section]] = [:], memberships: [String: StoredMemberships] = [:],
+    manualOrders: [String: [String]] = [:]
+  ) {
     sectionsByList = sections
     membershipsByList = memberships
+    self.manualOrders = manualOrders
   }
+
+  public func manualReminderOrder(of list: ReminderList) -> [String]? { manualOrders[list.id] }
 
   /// Makes the next ``assign(reminderID:to:in:)`` fail with `error`.
   public func failNextAssignment(with error: RemindersError) {

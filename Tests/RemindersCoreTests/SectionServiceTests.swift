@@ -93,6 +93,39 @@ struct SectionReadingTests {
     let headings = output.text.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
     #expect(headings.filter(groups.contains) == groups)
   }
+  @Test("a manually sorted list keeps its order within each section and in Others; other lists sort by due date")
+  func manualOrder() async throws {
+    // The Port Test list as captured: manual order 5, 4, 3, 1, 2; Alpha holds 1 and 2, Beta 3 and 5, Gamma 4.
+    let list = ReminderList(id: "LIST-PORT", title: "Port")
+    let sectionIDs = (0..<3).map { "00000000-0000-4000-8000-00000000000\($0)" }
+    let sections = zip(["Gamma", "Alpha", "Beta"], [2, 0, 1]).enumerated().map { order, pair in
+      Section(id: sectionIDs[pair.1], displayName: pair.0, listName: list.title, sortOrder: order)
+    }
+    let reminderIDs = (1...6).map { "00000000-0000-4000-9000-00000000000\($0)" }
+    let memberships = zip(reminderIDs.prefix(5), [0, 0, 1, 2, 1]).map { reminder, section in
+      #"{"memberID":"\#(reminder)","groupID":"\#(sectionIDs[section])","modifiedOn":782900000}"#
+    }
+    let data = #"{"minimumSupportedVersion":20230430,"memberships":["# + memberships.joined(separator: ",") + "]}"
+    // EventKit's order, and Port test 6 (in no section) that the manual order doesn't name.
+    let reminders = [6, 4, 1, 2, 5, 3].map { number in
+      Reminder(
+        id: reminderIDs[number - 1], title: "Port test \(number)", listID: list.id, listName: list.title,
+        dueDate: number == 2 ? CalendarDay(year: 2026, month: 1, day: 1) : nil)
+    }
+    let manual = [5, 4, 3, 1, 2].map { reminderIDs[$0 - 1].lowercased() }
+    func listing(manualOrder: [String]?) async throws -> [String] {
+      let store = InMemoryReminderStore(lists: [list], reminders: reminders, now: { referenceInstant })
+      let sectionStore = InMemorySectionStore(
+        sections: [list.id: sections], memberships: [list.id: StoredMemberships(data: data)],
+        manualOrders: manualOrder.map { [list.id: $0] } ?? [:])
+      let service = RemindersService(store: store, sections: sectionStore, clock: utcClock)
+      return try await service.contents(ofList: "Port").reminders.map(\.title)
+    }
+    // Gamma: 4; Alpha: 1, 2; Beta: 5, 3; Others: 6.
+    #expect(try await listing(manualOrder: manual) == [4, 1, 2, 5, 3, 6].map { "Port test \($0)" })
+    // Without a manual order, the dated Port test 2 comes first within Alpha, and Beta keeps EventKit's 5, 3.
+    #expect(try await listing(manualOrder: nil) == [4, 2, 1, 5, 3, 6].map { "Port test \($0)" })
+  }
 }
 
 @Suite("Sections: changes")

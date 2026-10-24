@@ -68,6 +68,54 @@
       }
     }
 
+    /// The classes and methods every section command relies on, by class; instance methods unless marked `+`.
+    static let requiredParts: [(String, [String])] = [
+      ("REMStore", ["fetchListWithObjectID:error:"]),
+      ("REMAccountsDataView", ["initWithStore:", "fetchAllAccountsWithError:"]),
+      ("REMListsDataView", ["initWithStore:", "fetchListsInAccount:error:"]),
+      (
+        "REMListSectionsDataView",
+        ["initWithStore:", "fetchListSectionsInList:error:", "fetchListSectionWithReminderID:error:"]
+      ),
+      (
+        "REMRemindersDataView",
+        ["initWithStore:", "fetchRemindersWithListID:includingSubtasks:includingCompleted:error:"]
+      ),
+      ("REMReminder", ["+objectIDWithUUID:"]),
+      (
+        "REMSaveRequest",
+        [
+          "initWithStore:", "updateList:", "updateListSection:",
+          "addListSectionWithDisplayName:toListSectionContextChangeItem:", "saveSynchronouslyWithError:",
+        ]
+      ),
+      ("REMListChangeItem", ["sectionsContextChangeItem"]),
+      ("REMListSectionContextChangeItem", ["setUnsavedMembershipsOfRemindersInSections:"]),
+      ("REMListSectionChangeItem", ["removeFromList"]),
+      ("REMMembership", ["initWithMemberIdentifier:groupIdentifier:isObsolete:modifiedOn:"]),
+      ("REMMemberships", ["initWithMemberships:"]),
+    ]
+
+    /// The first required class or method this Mac's ReminderKit lacks (see ``requiredParts``); nil when it has
+    /// them all. Loads the framework but talks to nothing.
+    public static func missingPart() -> String? {
+      do throws(RemindersError) {
+        try Runtime.loadFramework()
+      } catch {
+        return error.message
+      }
+      for (name, selectors) in requiredParts {
+        guard let type = NSClassFromString(name) else { return "the class \(name) is missing" }
+        for selector in selectors {
+          let isClassMethod = selector.hasPrefix("+")
+          let sel = NSSelectorFromString(isClassMethod ? String(selector.dropFirst()) : selector)
+          let found = isClassMethod ? class_getClassMethod(type, sel) != nil : class_getInstanceMethod(type, sel) != nil
+          if !found { return "\(name) has no method \(selector)" }
+        }
+      }
+      return nil
+    }
+
     /// Runs `body` on a fresh session, draining what ReminderKit autoreleases.
     func withSession<T>(_ body: (ReminderKitSession) throws(RemindersError) -> T) throws(RemindersError)
       -> T

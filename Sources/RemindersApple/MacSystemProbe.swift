@@ -31,28 +31,12 @@ public struct MacSystemProbe: SystemProbe {
     #endif
   }
 
-  public var remindersDataDirectory: String {
-    FileManager.default.homeDirectoryForCurrentUser
-      .appending(path: "Library/Group Containers/group.com.apple.reminders/Container_v1/Stores").path
-  }
-
-  public func remindersDataDirectoryExists() -> Bool {
-    FileManager.default.fileExists(atPath: remindersDataDirectory)
-  }
-
-  /// Listing this directory needs Full Disk Access for the terminal app.
-  public func remindersDatabaseFiles() throws(RemindersError) -> [String] {
-    let directory = remindersDataDirectory
-    guard remindersDataDirectoryExists() else {
-      throw RemindersError(.databaseNotFound, "Reminders data directory not found at \(directory)")
-    }
-    let names: [String]
-    do {
-      names = try FileManager.default.contentsOfDirectory(atPath: directory)
-    } catch {
-      throw RemindersError(.permissionDenied, "Cannot access Reminders database — permission denied")
-    }
-    return names.filter { $0.hasSuffix(".sqlite") }.sorted().map { "\(directory)/\($0)" }
+  public func reminderKitProblem() -> String? {
+    #if os(macOS)
+      RuntimeReminderKit.missingPart()
+    #else
+      "ReminderKit is only on macOS"
+    #endif
   }
 
   public var hostApplication: HostApplication? {

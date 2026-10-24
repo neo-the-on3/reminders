@@ -6,21 +6,16 @@ import Testing
 @testable import RemindersCLI
 @testable import RemindersCore
 
-/// A Mac with every check passing except, optionally, Full Disk Access.
+/// A Mac with every check passing except, optionally, ReminderKit.
 private struct HealthySystem: SystemProbe {
-  var databaseAccess = true
+  var reminderKit = true
   let operatingSystemVersion: String? = "26.1"
   let embeddedInfoPlist: [String: String]? = [
     "CFBundleIdentifier": ProductInfo.bundleIdentifier, "NSRemindersFullAccessUsageDescription": "Needed",
   ]
-  let remindersDataDirectory = "/Users/test/Library/Group Containers/group.com.apple.reminders/Container_v1/Stores"
   let hostApplication: HostApplication? = HostApplication(name: "iTerm", bundlePath: "/Applications/iTerm.app")
 
-  func remindersDataDirectoryExists() -> Bool { true }
-  func remindersDatabaseFiles() throws(RemindersError) -> [String] {
-    guard databaseAccess else { throw RemindersError(.permissionDenied, "Cannot access Reminders database") }
-    return ["\(remindersDataDirectory)/Data-1.sqlite"]
-  }
+  func reminderKitProblem() -> String? { reminderKit ? nil : "the class REMStore is missing" }
   func openSettings(_ pane: SettingsPane) -> Bool { true }
 }
 
@@ -177,7 +172,7 @@ struct CommandExecutionTests {
   @Test("authorize exits 1 unless Reminders access ends up granted")
   func authorizeExitStatus() async throws {
     let undecided = Harness(store: InMemoryReminderStore(access: .notDetermined))
-    #expect(try await undecided.run(["authorize", "--json"], system: HealthySystem(databaseAccess: false)) == 0)
+    #expect(try await undecided.run(["authorize", "--json"], system: HealthySystem(reminderKit: false)) == 0)
     #expect(undecided.output.text.contains(#""success" : true"#))
 
     for access in [ReminderAccess.denied, .restricted, .writeOnly] {

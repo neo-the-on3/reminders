@@ -8,14 +8,13 @@ import Testing
 private final class FakeSystem: SystemProbe {
   let operatingSystemVersion: String?
   let embeddedInfoPlist: [String: String]?
-  let remindersDataDirectory = "/Users/test/Library/Group Containers/group.com.apple.reminders/Container_v1/Stores"
-  private let databases: [String]?
+  private let reminderKit: Bool
   private let opened = Mutex<[SettingsPane]>([])
 
   let hostApplication: HostApplication?
 
   init(
-    version: String? = "26.1", plist: Bool = true, databases: [String]? = ["Data-1.sqlite"],
+    version: String? = "26.1", plist: Bool = true, reminderKit: Bool = true,
     host: HostApplication? = HostApplication(name: "Terminal", bundlePath: FakeSystem.terminalPath)
   ) {
     hostApplication = host
@@ -23,19 +22,14 @@ private final class FakeSystem: SystemProbe {
     embeddedInfoPlist =
       plist
       ? ["CFBundleIdentifier": ProductInfo.bundleIdentifier, "NSRemindersFullAccessUsageDescription": "Needed"] : nil
-    self.databases = databases
+    self.reminderKit = reminderKit
   }
 
   static let terminalPath = "/System/Applications/Utilities/Terminal.app"
 
   var openedPanes: [SettingsPane] { opened.withLock { $0 } }
 
-  func remindersDataDirectoryExists() -> Bool { databases != nil }
-
-  func remindersDatabaseFiles() throws(RemindersError) -> [String] {
-    guard let databases else { throw RemindersError(.permissionDenied, "Cannot access Reminders database") }
-    return databases.map { "\(remindersDataDirectory)/\($0)" }
-  }
+  func reminderKitProblem() -> String? { reminderKit ? nil : "REMListSectionsDataView has no method x" }
 
   func openSettings(_ pane: SettingsPane) -> Bool {
     opened.withLock { $0.append(pane) }
@@ -59,8 +53,7 @@ struct DiagnosticsTests {
     #expect(report.passed)
     #expect(
       report.checks.map(\.name) == [
-        "macOS version", "Info.plist", "Permissions app", "Reminders database", "Reminders access",
-        "Reminders data dir",
+        "macOS version", "Info.plist", "Permissions app", "Sections (ReminderKit)", "Reminders access",
       ])
     #expect(report.checks.allSatisfy { $0.status == .ok })
     #expect(report.checks[2].message == "Terminal")
@@ -102,18 +95,17 @@ struct DiagnosticsTests {
     #expect(access.message == "Denied for your terminal app")
   }
 
-  @Test("old macOS fails; a missing Info.plist and database access warn")
+  @Test("old macOS fails; a missing Info.plist and ReminderKit warn")
   func problems() async {
-    let report = await diagnostics(system: FakeSystem(version: "15.4", plist: false, databases: nil)).checkHealth(
+    let report = await diagnostics(system: FakeSystem(version: "15.4", plist: false, reminderKit: false)).checkHealth(
       includeDatabaseStats: true, includeSync: true)
     let statuses = Dictionary(uniqueKeysWithValues: report.checks.map { ($0.name, $0.status) })
     #expect(statuses["macOS version"] == .fail)
     #expect(statuses["Info.plist"] == .warn)
-    #expect(statuses["Reminders database"] == .warn)
+    #expect(statuses["Sections (ReminderKit)"] == .warn)
     #expect(statuses["Database stats"] == .warn)
     #expect(statuses["Sync"] == .warn)
-    #expect(statuses["Reminders data dir"] == .fail)
-    #expect(report.failureCount == 2)
+    #expect(report.failureCount == 1)
   }
 
   @Test("the summary counts warnings instead of claiming every check passed")
@@ -148,28 +140,25 @@ struct DiagnosticsTests {
         ✓ Info.plist: Embedded (io.github.neo-the-on3.reminders)
         ✓ Permissions app: Terminal
           /System/Applications/Utilities/Terminal.app
-        ✓ Reminders database: Found
-          /Users/test/Library/Group Containers/group.com.apple.reminders/Container_v1/Stores/Data-1.sqlite
+        ✓ Sections (ReminderKit): Available
         ✗ Reminders access: Denied for Terminal
           Enable Terminal in System Settings > Privacy & Security > Reminders, then restart Terminal. macOS won't ask again, so re-running reminders authorize won't help
-        ✓ Reminders data dir: Exists
 
         1 issue(s) found.
 
         """)
   }
 
-  @Test("authorize asks for access and opens Settings only for what's missing")
+  @Test("authorize asks for Reminders access, the only permission needed, and opens nothing once granted")
   func authorize() async {
-    let system = FakeSystem(databases: nil)
+    let system = FakeSystem()
     let (console, output, _) = makeConsole()
     let result = await diagnostics(access: .notDetermined, system: system).authorize(narratingTo: console)
     #expect(result.remindersAccess == .fullAccess)
-    #expect(!result.databaseAccess)
-    #expect(system.openedPanes == [.fullDiskAccess])
+    #expect(system.openedPanes.isEmpty)
     #expect(output.text.contains("✓ Reminders access granted (1 list found)"))
-    #expect(output.text.contains("✗ Database access not yet granted."))
-    #expect(output.text.contains("Full Disk Access for Terminal"))
+    #expect(!output.text.contains("Full Disk Access"))
+    #expect(!output.text.contains("atabase"))
   }
 
   @Test("authorize after a denial points to System Settings instead of prompting again")
@@ -219,7 +208,6 @@ struct DiagnosticsTests {
       output.text == """
         {
           "data" : {
-            "databaseAccess" : true,
             "host" : {
               "bundlePath" : "/System/Applications/Utilities/Terminal.app",
               "isThisTool" : false,
@@ -238,10 +226,10 @@ struct DiagnosticsTests {
         """)
   }
 
-  @Test("authorize only fails without full Reminders access; database access doesn't count")
+  @Test("authorize only fails without full Reminders access; ReminderKit doesn't count")
   func authorizeFailure() async {
     let (console, _, _) = makeConsole(json: true)
-    let granted = diagnostics(system: FakeSystem(databases: nil))
+    let granted = diagnostics(system: FakeSystem(reminderKit: false))
     #expect(granted.failure(of: await granted.authorize(narratingTo: console)) == nil)
     for access in [ReminderAccess.notDetermined, .denied, .restricted, .writeOnly] {
       let denied = diagnostics(access: access, promptAnswer: .denied)

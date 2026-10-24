@@ -54,9 +54,7 @@ private func run(_ arguments: [String], in home: FakeHome) async throws -> (Int3
 private struct DatabaseFreeProbe: SystemProbe {
   var operatingSystemVersion: String? { "26.0" }
   var embeddedInfoPlist: [String: String]? { nil }
-  var remindersDataDirectory: String { "/nowhere" }
-  func remindersDataDirectoryExists() -> Bool { false }
-  func remindersDatabaseFiles() throws(RemindersError) -> [String] { [] }
+  func reminderKitProblem() -> String? { nil }
   var hostApplication: HostApplication? { nil }
   func openSettings(_ pane: SettingsPane) -> Bool { false }
 }

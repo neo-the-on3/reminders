@@ -70,13 +70,11 @@ public struct HealthReport: ConsoleRepresentable {
 /// are narrated as they happen.
 public struct AuthorizationReport: ConsoleRepresentable {
   public var remindersAccess: ReminderAccess
-  public var databaseAccess: Bool
   /// The app the permissions belong to, when known.
   public var host: HostApplication?
 
-  public init(remindersAccess: ReminderAccess, databaseAccess: Bool, host: HostApplication? = nil) {
+  public init(remindersAccess: ReminderAccess, host: HostApplication? = nil) {
     self.remindersAccess = remindersAccess
-    self.databaseAccess = databaseAccess
     self.host = host
   }
 

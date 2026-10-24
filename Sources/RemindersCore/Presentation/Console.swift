@@ -95,6 +95,12 @@ public struct Console: Sendable {
     }
   }
 
+  /// A note for people about the result, such as what it leaves out, on standard error so the result itself stays
+  /// clean. Suppressed with `--json`.
+  public func hint(_ text: String) {
+    if format == .text { errors.write(style(text, .dim)) }
+  }
+
   /// Human-only narration, such as the steps `authorize` walks through. Suppressed with `--json`.
   public func narrate(_ text: String) {
     if format == .text { output.write(text) }
@@ -156,6 +162,9 @@ public struct ReminderListing: ConsoleRepresentable {
   /// Title above the reminders, such as the list name or "Due Today".
   public var heading: String?
   public var layout: ReminderLayout
+  /// Why the list's sections couldn't be read, when they couldn't; the reminders are then shown without them.
+  /// Not part of the JSON result.
+  public var sectionsUnavailable: RemindersError?
 
   /// - Parameter sectionOrder: The list's section names in order. When given, reminders are grouped by section in
   ///   that order, with those in no section last, so text and JSON both follow the list's sections.

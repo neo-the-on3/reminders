@@ -56,7 +56,9 @@ struct SectionReadingTests {
   func noSectionStore() async throws {
     let store = InMemoryReminderStore(lists: [Fixture.groceries], reminders: Fixture.reminders)
     let service = RemindersService(store: store, clock: utcClock)
-    #expect(try await service.contents(ofList: "Groceries").reminders.count == 3)
+    let plain = try await service.contents(ofList: "Groceries")
+    #expect(plain.reminders.count == 3)
+    #expect(plain.sectionsUnavailable == .notImplemented("Sections"))
     await #expect(throws: RemindersError.notImplemented("Sections")) {
       try await service.contents(ofList: "Groceries", section: "Dairy")
     }
@@ -72,6 +74,8 @@ struct SectionReadingTests {
     let others = try await service.contents(ofList: "groc", unsectioned: true)
     #expect(others.reminders.map(\.title) == ["Bread"])
     #expect(others.heading == "Groceries › No section")
+    #expect(others.sectionsUnavailable == nil)
+    #expect(try await service.contents(ofList: "Groceries").sectionsUnavailable == nil)
     do {
       _ = try await service.contents(ofList: "Groceries", section: "Dairy", unsectioned: true)
       Issue.record("expected INVALID_ARGUMENT")

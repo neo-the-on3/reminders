@@ -42,9 +42,14 @@ struct ListContents: ConsoleCommand {
   @Flag(help: "Include completed reminders") var includeCompleted = false
 
   func run(in context: CommandContext) async throws {
-    context.console.show(
-      try await context.service.contents(
-        ofList: name, section: section, unsectioned: unsectioned, includeCompleted: includeCompleted))
+    let listing = try await context.service.contents(
+      ofList: name, section: section, unsectioned: unsectioned, includeCompleted: includeCompleted)
+    context.console.show(listing)
+    if let problem = listing.sectionsUnavailable {
+      context.console.hint(
+        "Sections couldn't be read, so they aren't shown: \(problem.message). "
+          + "Run `\(ProductInfo.name) doctor` to check ReminderKit.\n")
+    }
   }
 }
 

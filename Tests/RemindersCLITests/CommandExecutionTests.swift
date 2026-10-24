@@ -169,9 +169,16 @@ struct CommandExecutionTests {
     #expect(denied.errors.text.isEmpty)
   }
 
-  @Test("list --unsectioned needs sections, and doesn't go with --section")
-  func unsectionedOption() async throws {
+  @Test("plain list notes on stderr when sections can't be read, but not with --json; --unsectioned needs them")
+  func sectionsUnavailableHint() async throws {
+    let harness = Harness()
+    #expect(try await harness.run(["list", "Inbox"]) == 0)
+    #expect(harness.errors.text.contains("Sections couldn't be read, so they aren't shown"))
+    #expect(harness.errors.text.contains("reminders doctor"))
+    #expect(!harness.output.text.contains("Sections couldn't be read"))
     let json = Harness()
+    #expect(try await json.run(["list", "Inbox", "--json"]) == 0)
+    #expect(json.errors.text.isEmpty)
     #expect(try await json.run(["list", "Inbox", "--unsectioned", "--json"]) == 1)
     #expect(json.errors.text.contains("NOT_IMPLEMENTED"))
     #expect(try await json.run(["list", "Inbox", "--unsectioned", "--section", "A", "--json"]) == 1)

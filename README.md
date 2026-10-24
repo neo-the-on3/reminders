@@ -249,7 +249,8 @@ Each tool runs the same operation as the CLI command, with the same name matchin
 \* With `section`, the reminder is added and then moved into the section; if that second step fails, the error
 says the reminder was added. Sections are read and changed only through ReminderKit; where it's missing or
 changed, the section tools and a `section` or `unsectioned` filter fail with `REMINDERKIT_UNAVAILABLE`, and `reminders_list` still
-works, without section names. Every section change is read back after saving; one Reminders accepted but didn't
+works, without section names. So does `list` without a filter, which then notes on standard error (not with
+`--json`) that sections couldn't be read, and why. Every section change is read back after saving; one Reminders accepted but didn't
 apply fails with `WRITE_NOT_APPLIED` rather than reporting success. `REMINDERS_DEBUG=1` prints, on standard error
 only, which selectors each section read used and every ReminderKit write step (selectors, classes, the save's
 result and error).

@@ -64,7 +64,8 @@ public struct RemindersService: Sendable {
   /// (the ones Reminders shows under "Others").
   ///
   /// Sections come from the section store (on a Mac, ReminderKit). When it can't answer, the list is shown without
-  /// them, unless `section` or `unsectioned` asks for them, which then fails.
+  /// them and the listing says why (``ReminderListing/sectionsUnavailable``), unless `section` or `unsectioned`
+  /// asks for them, which then fails.
   ///
   /// A list sorted manually in Reminders keeps that order (within each section); otherwise reminders are sorted by
   /// due date.
@@ -95,8 +96,13 @@ public struct RemindersService: Sendable {
       reminders = layout.tagging(reminders).filter { layout.sectionID(of: $0) == nil }
       return ReminderListing(reminders, heading: "\(list.title) › No section", layout: order)
     }
-    guard let layout = try? await sectionLayout(of: list, for: reminders) else {
-      return ReminderListing(reminders, heading: list.title, layout: order)
+    let layout: SectionLayout
+    do {
+      layout = try await sectionLayout(of: list, for: reminders)
+    } catch {
+      var listing = ReminderListing(reminders, heading: list.title, layout: order)
+      listing.sectionsUnavailable = error
+      return listing
     }
     return ReminderListing(
       layout.tagging(reminders), heading: list.title, layout: order, sectionOrder: layout.sections.map(\.displayName))

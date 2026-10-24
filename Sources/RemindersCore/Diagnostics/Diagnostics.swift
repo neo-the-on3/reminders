@@ -35,8 +35,9 @@ public struct Diagnostics: Sendable {
 
   /// Asks for Reminders access (the system prompt) if the user hasn't decided yet, and opens System Settings when
   /// it's missing, narrating each step to `console`. Reminders access is the only permission needed: sections go
-  /// through ReminderKit, not Reminders' database.
-  public func authorize(narratingTo console: Console) async -> AuthorizationReport {
+  /// through ReminderKit, not Reminders' database. With `forMCPServer` (`authorize --for-mcp`) it also opens the
+  /// Reminders page to turn on this tool's own entry, which a terminal's own access doesn't cover.
+  public func authorize(narratingTo console: Console, forMCPServer: Bool = false) async -> AuthorizationReport {
     let style = console.style
     let name = ProductInfo.name
     let permissions = permissions
@@ -54,8 +55,10 @@ public struct Diagnostics: Sendable {
     console.narrate(
       style("\n\(name) authorize\n", .bold) + console.renderer.rule(20) + "\n\n" + style(attribution, .dim))
 
+    var openedPane = false
     func open(_ pane: SettingsPane, toEnable what: String) {
       console.narrate("     Opening System Settings — \(what).\n")
+      openedPane = true
       if !system.openSettings(pane) { console.narrate(style("     Go to: \(pane.location)\n", .dim)) }
     }
 
@@ -90,7 +93,25 @@ public struct Diagnostics: Sendable {
         console.narrate("     macOS won't show the prompt again; only System Settings can change this.\n")
       }
       console.narrate("     \(permissions.remedy(for: access) ?? "").\n")
-      open(.reminders, toEnable: "enable \(holder) under Reminders")
+      open(.reminders, toEnable: "turn on \"\(holder)\" under Reminders")
+    }
+
+    // Run from a terminal, the checks above were about the terminal app. An MCP client that disclaims its servers
+    // (Claude Desktop) leaves the tool its own entry, which only System Settings can change once it's been asked.
+    if forMCPServer && !permissions.holderIsThisTool {
+      console.narrate(
+        "\nFor MCP clients that leave \(name) its own Reminders access, such as Claude Desktop:\n"
+          + "     macOS keeps a separate \"\(name)\" entry for the server; \(holder)'s access doesn't cover it.\n")
+      let toggle = "turn on \"\(name)\" under Reminders, then quit and reopen the MCP client"
+      if openedPane {
+        console.narrate("     In the same page, \(toggle).\n")
+      } else {
+        open(.reminders, toEnable: toggle)
+      }
+      console.narrate(
+        style(
+          "     If \"\(name)\" isn't listed, open the MCP client and use a Reminders tool once so macOS asks.\n",
+          .dim))
     }
 
     return AuthorizationReport(remindersAccess: access, host: system.hostApplication)

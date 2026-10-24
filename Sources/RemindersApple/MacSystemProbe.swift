@@ -53,6 +53,15 @@ public struct MacSystemProbe: SystemProbe {
     #endif
   }
 
+  public var launchingApplication: HostApplication? {
+    #if os(macOS)
+      HostApplication.enclosing(
+        pid: getppid(), lookup: Self.processRecord(_:), displayName: Self.bundleDisplayName(_:))
+    #else
+      nil
+    #endif
+  }
+
   public func openSettings(_ pane: SettingsPane) -> Bool {
     #if os(macOS)
       let process = Process()

@@ -129,7 +129,57 @@ struct HostApplicationTests {
     #expect(remedy.contains("then try again"))
     #expect(!remedy.contains("restart reminders"))
     #expect(!guidance.unpromptedRemedy.contains("from a terminal app"))
+    #expect(!remedy.contains("MCP client"))
     let terminal = PermissionGuidance(host: HostApplication(name: "Terminal", bundlePath: "/Terminal.app"))
     #expect(terminal.remedy(for: .denied)?.contains("then restart Terminal") == true)
+  }
+
+  private static let claudeApp = HostApplication(name: "Claude", bundlePath: "/Applications/Claude.app")
+  private static let cursorApp = HostApplication(name: "Cursor", bundlePath: "/Applications/Cursor.app")
+
+  @Test("under an MCP client that leaves the tool responsible, errors name \"reminders\" as this tool, not the client")
+  func mcpServerHoldingItsOwn() {
+    let guidance = PermissionGuidance(
+      host: .thisTool(at: "/opt/homebrew/bin/reminders"), launch: .mcpServer(client: Self.claudeApp))
+    let denied = guidance.error(for: .denied)
+    #expect(denied.code == .permissionDenied)
+    #expect(denied.message == #"Reminders access not granted (Denied for "reminders" (this tool))"#)
+    // Led by a command: a model relaying the error repeats a command where it paraphrases prose.
+    #expect(
+      denied.suggestion
+        == #"Run `reminders authorize --for-mcp` in Terminal, turn on "reminders" (this tool, not Claude) in the "#
+        + "System Settings page it opens, then quit and reopen Claude so the change takes effect")
+    #expect(denied.suggestion?.contains("restart reminders") == false)
+    #expect(denied.suggestion?.contains("won't help") == false)
+    #expect(
+      guidance.remedy(for: .writeOnly)
+        == #"Run `reminders authorize --for-mcp` in Terminal, choose Full Access for "reminders" (this tool, not "#
+        + "Claude) in the System Settings page it opens, then quit and reopen Claude so the change takes effect")
+    #expect(guidance.remedy(for: .restricted)?.hasPrefix("Run `reminders authorize --for-mcp` in Terminal") == true)
+    #expect(guidance.remedy(for: .restricted)?.contains("Screen Time") == true)
+    let unprompted = guidance.error(for: .notDetermined).suggestion ?? ""
+    #expect(unprompted.hasPrefix(#"Run `reminders authorize --for-mcp` in Terminal, turn on "reminders""#))
+    #expect(unprompted.contains("then quit and reopen Claude so the change takes effect"))
+    #expect(unprompted.contains("Info.plist"))
+    // A client the tool couldn't name is still the one to reopen.
+    let unnamed = PermissionGuidance(host: .thisTool(at: "/r"), launch: .mcpServer(client: nil))
+    #expect(unnamed.remedy(for: .denied)?.contains(#""reminders" (this tool, not the MCP client)"#) == true)
+    #expect(unnamed.remedy(for: .denied)?.contains("quit and reopen the MCP client") == true)
+  }
+
+  @Test("under an MCP client that takes responsibility, errors name that app as the client holding access")
+  func mcpServerUnderResponsibleClient() {
+    let guidance = PermissionGuidance(host: Self.cursorApp, launch: .mcpServer(client: Self.cursorApp))
+    #expect(guidance.error(for: .denied).message == #"Reminders access not granted (Denied for "Cursor")"#)
+    #expect(
+      guidance.remedy(for: .denied)
+        == #"Run `reminders authorize` in a terminal inside Cursor, turn on "Cursor" (the MCP client, which holds "#
+        + "Reminders access for this tool) if System Settings opens, then quit and reopen Cursor so the change takes "
+        + "effect")
+    let unprompted = guidance.error(for: .notDetermined)
+    #expect(unprompted.message.contains(#"macOS didn't show the prompt for "Cursor""#))
+    #expect(unprompted.suggestion?.contains("then quit and reopen Cursor so the change takes effect") == true)
+    #expect(unprompted.suggestion?.hasPrefix("Run `reminders authorize` in a terminal inside Cursor") == true)
+    #expect(unprompted.suggestion?.contains("from a terminal app") == false)
   }
 }

@@ -189,6 +189,13 @@ struct CommandExecutionTests {
     #expect(try await refused.run(["authorize", "--json"], system: HealthySystem()) == 1)
   }
 
+  @Test("authorize --for-mcp names the tool's own entry and exits on the terminal's own access")
+  func authorizeForMCP() async throws {
+    let harness = Harness(store: InMemoryReminderStore(access: .fullAccess))
+    #expect(try await harness.run(["authorize", "--for-mcp"], system: HealthySystem()) == 0)
+    #expect(harness.output.text.contains(#"turn on "reminders" under Reminders, then quit and reopen the MCP client"#))
+  }
+
   @Test("without Apple Reminders every command reports UNSUPPORTED_PLATFORM")
   func unsupportedPlatform() async throws {
     let harness = Harness()

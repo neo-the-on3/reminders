@@ -172,6 +172,54 @@ struct DiagnosticsTests {
     #expect(output.text.contains("✗ Reminders access: Denied for Terminal."))
     #expect(output.text.contains("macOS won't show the prompt again"))
     #expect(output.text.contains("Enable Terminal in System Settings > Privacy & Security > Reminders"))
+    #expect(output.text.contains(#"Opening System Settings — turn on "Terminal" under Reminders."#))
+  }
+
+  @Test("authorize run as the tool itself after a denial or restriction opens Settings and names \"reminders\"")
+  func authorizeOwnEntryBlocked() async {
+    for access in [ReminderAccess.denied, .restricted] {
+      let system = FakeSystem(host: .thisTool(at: "/opt/homebrew/bin/reminders"))
+      let (console, output, _) = makeConsole()
+      let result = await diagnostics(access: access, system: system).authorize(narratingTo: console)
+      #expect(result.remindersAccess == access)
+      #expect(system.openedPanes == [.reminders])
+      #expect(output.text.contains(#"Opening System Settings — turn on "reminders" under Reminders."#))
+      #expect(!output.text.contains("If a system dialog appears"))
+    }
+  }
+
+  @Test("authorize --for-mcp from a terminal still prompts first, then opens Settings at the tool's own entry")
+  func authorizeForMCPServer() async {
+    let system = FakeSystem()
+    let (console, output, _) = makeConsole()
+    let result = await diagnostics(access: .notDetermined, system: system)
+      .authorize(narratingTo: console, forMCPServer: true)
+    #expect(result.remindersAccess == .fullAccess)
+    #expect(output.text.contains("If a system dialog appears, click Allow."))
+    #expect(output.text.contains("✓ Reminders access granted"))
+    #expect(system.openedPanes == [.reminders])
+    #expect(
+      output.text.contains(
+        #"Opening System Settings — turn on "reminders" under Reminders, then quit and reopen the MCP client."#))
+  }
+
+  @Test("authorize --for-mcp after the terminal's own denial opens Settings once for both entries")
+  func authorizeForMCPServerAfterDenial() async {
+    let system = FakeSystem()
+    let (console, output, _) = makeConsole()
+    _ = await diagnostics(access: .denied, system: system).authorize(narratingTo: console, forMCPServer: true)
+    #expect(system.openedPanes == [.reminders])
+    #expect(output.text.contains(#"turn on "Terminal" under Reminders"#))
+    #expect(output.text.contains(#"In the same page, turn on "reminders" under Reminders"#))
+  }
+
+  @Test("authorize --for-mcp run as the tool itself needs nothing extra")
+  func authorizeForMCPServerAsTheTool() async {
+    let system = FakeSystem(host: .thisTool(at: "/opt/homebrew/bin/reminders"))
+    let (console, output, _) = makeConsole()
+    _ = await diagnostics(access: .fullAccess, system: system).authorize(narratingTo: console, forMCPServer: true)
+    #expect(system.openedPanes.isEmpty)
+    #expect(!output.text.contains("For MCP clients"))
   }
 
   @Test("authorize explains a prompt macOS never showed")

@@ -25,10 +25,12 @@
         let storage = try session.storage(of: list).list
         let objects = try session.sections(of: storage)
         let dateKey = ReminderKitSession.creationDateKey(of: objects)
-        let order = ReminderKitSession.sectionOrder(of: storage)
+        var probes: [String] = []
+        let order = ReminderKitSession.sectionOrder(of: storage, probes: &probes)
         return ReminderKitSections(
           sections: objects.compactMap { ReminderKitSession.section($0, creationDateKey: dateKey) },
-          storedOrder: order?.value ?? [], storedOrderSelector: order?.selector, creationDateSelector: dateKey)
+          storedOrder: order?.value ?? [], storedOrderSelector: order?.selector, creationDateSelector: dateKey,
+          orderProbes: probes)
       }
     }
 
@@ -136,18 +138,38 @@
       }
     }
 
-    /// The section identifiers in the list's arranged order, from whichever form this ReminderKit exposes (the
-    /// stored JSON or the identifiers themselves), with the property it came from. Nil when neither has an order,
-    /// as when the list's stored ordering is NULL.
-    static func sectionOrder(of list: NSObject) -> ReminderKitRead<[String]>? {
-      if let data = Runtime.object(list, "sectionIDsOrderingAsData") as? NSData {
-        let order = DatabaseRows.sectionOrder([UInt8](data as Data))
-        if !order.isEmpty { return ReminderKitRead(order, via: "sectionIDsOrderingAsData") }
-      }
-      if let order = Runtime.object(list, "sectionIDsOrdering").map(Runtime.identifiers), !order.isEmpty {
-        return ReminderKitRead(order, via: "sectionIDsOrdering")
+    /// Properties that may hold a list's arranged section order, tried in turn on the list and on its `storage`.
+    static let sectionOrderKeys = [
+      "sectionIDsOrderingAsData", "sectionIDsOrdering", "sectionsOrdering", "orderedSectionIDs",
+      "sectionIDsOrderingData", "listSectionIDsOrdering",
+    ]
+
+    /// The section identifiers in the list's arranged order, from the first candidate property that has one (as
+    /// stored JSON, an `{orderedIdentifiers}` object, or a collection of identifiers), with where it came from
+    /// (`storage.` marks the list's storage object). Nil when none has an order, as when the stored ordering is
+    /// NULL. `probes` records what each candidate gave, for `REMINDERS_DEBUG`.
+    static func sectionOrder(of list: NSObject, probes: inout [String]) -> ReminderKitRead<[String]>? {
+      var owners: [(prefix: String, object: NSObject)] = [("", list)]
+      if let storage = Runtime.object(list, "storage") { owners.append(("storage.", storage)) }
+      for (prefix, owner) in owners {
+        for key in sectionOrderKeys {
+          guard owner.responds(to: NSSelectorFromString(key)) else { continue }
+          let value = Runtime.object(owner, key)
+          let order = value.map(orderedIdentifiers) ?? []
+          probes.append("\(prefix)\(key)=\(value.map(Runtime.className) ?? "nil")[\(order.count)]")
+          if !order.isEmpty { return ReminderKitRead(order, via: prefix + key) }
+        }
       }
       return nil
+    }
+
+    /// Section identifiers from an ordering value: stored JSON (`{"orderedIdentifiers": [...]}`), an object with
+    /// `orderedIdentifiers`, or a collection of identifiers.
+    static func orderedIdentifiers(_ value: NSObject) -> [String] {
+      if let data = value as? NSData { return DatabaseRows.sectionOrder([UInt8](data as Data)) }
+      if let string = value as? String { return DatabaseRows.sectionOrder(Array(string.utf8)) }
+      if let inner = Runtime.object(value, "orderedIdentifiers") { return Runtime.identifiers(in: inner) }
+      return Runtime.identifiers(in: value)
     }
 
     /// The list's memberships, from the stored JSON or from `REMMemberships`, whichever this ReminderKit exposes;

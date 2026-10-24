@@ -48,34 +48,38 @@ public struct AppleSectionStore: SectionStore {
     }
   }
 
-  /// ReminderKit's sections in the order the user sees, and how that order was found.
+  /// ReminderKit's sections in the order the user sees, and where that order came from.
   ///
-  /// The list's stored order comes first. Sections it doesn't name (all of them when it's NULL, as for a list whose
-  /// sections were never rearranged) go in creation order, as Reminders shows them: by creation date when
-  /// ReminderKit exposes one, else as the database orders them (by `Z_PK`), else in reverse fetch order. The last
-  /// rests on what the Mac showed: with a NULL stored order, `fetchListSectionsInList:error:` returned Grocery's
-  /// four sections exactly newest first.
+  /// 1. The list's stored order through ReminderKit, when a property of the list (or its storage) has it.
+  /// 2. Otherwise the database, when it can be read: its `ZSECTIONIDSORDERINGASDATA`, then creation order (`Z_PK`).
+  ///    This also places sections a ReminderKit order doesn't name.
+  /// 3. Otherwise newest `creationDate` first, then reverse fetch order. Both match what the Mac showed for a list
+  ///    without a stored order: the app's order (the database's `Z_PK` order) was the exact reverse of ReminderKit's
+  ///    fetch order and of ascending `creationDate`.
   private func arrange(_ fetched: ReminderKitSections, in list: ReminderList) async -> ([ReminderKitSection], String) {
     let named = Set(fetched.storedOrder.map { $0.uppercased() })
-    let stored = fetched.storedOrderSelector ?? "none"
-    guard fetched.sections.contains(where: { !named.contains($0.id.uppercased()) }) else {
+    let stored = fetched.storedOrderSelector.map { "reminderkit \($0)" }
+    if let stored, !fetched.sections.contains(where: { !named.contains($0.id.uppercased()) }) {
       return (DatabaseRows.arranged(fetched.sections, by: fetched.storedOrder, identifier: \.id), stored)
     }
-    let byCreation: [ReminderKitSection]
-    let creation: String
-    if let key = fetched.creationDateSelector, fetched.sections.allSatisfy({ $0.createdAt != nil }) {
-      byCreation = fetched.sections.enumerated().sorted {
-        ($0.element.createdAt ?? .distantPast, $0.offset) < ($1.element.createdAt ?? .distantPast, $1.offset)
+    let probed = fetched.orderProbes.isEmpty ? "" : " [probed: \(fetched.orderProbes.joined(separator: ", "))]"
+    let rest: [ReminderKitSection]
+    let source: String
+    if let saved = try? await database.sections(in: list) {
+      rest = DatabaseRows.arranged(fetched.sections, by: saved.map(\.id), identifier: \.id)
+      source = "database (ZSECTIONIDSORDERINGASDATA, then Z_PK)"
+    } else if let key = fetched.creationDateSelector, fetched.sections.allSatisfy({ $0.createdAt != nil }) {
+      rest = fetched.sections.enumerated().sorted { first, second in
+        let (earlier, later) = (first.element.createdAt ?? .distantPast, second.element.createdAt ?? .distantPast)
+        return earlier != later ? earlier > later : first.offset < second.offset
       }.map(\.element)
-      creation = "creation date (\(key))"
-    } else if let saved = try? await database.sections(in: list) {
-      byCreation = DatabaseRows.arranged(fetched.sections, by: saved.map(\.id), identifier: \.id)
-      creation = "database order (Z_PK)"
+      source = "reminderkit \(key), newest first (database unreadable)"
     } else {
-      byCreation = fetched.sections.reversed()
-      creation = "reversed fetch order"
+      rest = fetched.sections.reversed()
+      source = "reversed fetch order (database unreadable)"
     }
-    return (DatabaseRows.arranged(byCreation, by: fetched.storedOrder, identifier: \.id), "\(stored), then \(creation)")
+    let order = DatabaseRows.arranged(rest, by: fetched.storedOrder, identifier: \.id)
+    return (order, (stored.map { "\($0), then " } ?? "none in reminderkit, ") + source + probed)
   }
 
   public func memberships(of list: ReminderList) async throws(RemindersError) -> StoredMemberships {

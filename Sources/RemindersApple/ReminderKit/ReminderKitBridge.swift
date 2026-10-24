@@ -50,8 +50,7 @@ public struct ReminderKitSection: Hashable, Sendable {
 
 /// A list's sections as ReminderKit fetches them, and the order information it exposes.
 ///
-/// The fetch order isn't the order the user sees: on the Mac it came back newest first. The arranged order is the
-/// list's stored section ordering, when it has one; sections it doesn't name go in creation order.
+/// The fetch order isn't the order the user sees: on the Mac it came back as the reverse of the app's order.
 public struct ReminderKitSections: Hashable, Sendable {
   /// In the order ReminderKit fetched them.
   public var sections: [ReminderKitSection]
@@ -63,11 +62,15 @@ public struct ReminderKitSections: Hashable, Sendable {
   public var storedOrderSelector: String?
   /// The property each section's `createdAt` came from; nil when sections expose no creation date.
   public var creationDateSelector: String?
+  /// What each order property that exists gave (`name=Class[count]`), for diagnostics.
+  public var orderProbes: [String]
 
   public init(
     sections: [ReminderKitSection], fetchSelector: String = "fetchListSectionsInList:error:",
-    storedOrder: [String] = [], storedOrderSelector: String? = nil, creationDateSelector: String? = nil
+    storedOrder: [String] = [], storedOrderSelector: String? = nil, creationDateSelector: String? = nil,
+    orderProbes: [String] = []
   ) {
+    self.orderProbes = orderProbes
     self.sections = sections
     self.fetchSelector = fetchSelector
     self.storedOrder = storedOrder

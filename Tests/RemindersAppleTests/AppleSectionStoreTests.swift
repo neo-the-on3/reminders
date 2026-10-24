@@ -109,9 +109,11 @@ private struct Setup {
 
   /// - Parameters:
   ///   - moreSections: Sections after Dairy in the database, in creation order (`Z_PK`).
+  ///   - ordering: The list's `ZSECTIONIDSORDERINGASDATA`.
   ///   - readableDatabase: False for a Mac without Full Disk Access, where the database can't be read.
   init(
-    readsThroughReminderKit: Bool = true, moreSections: [ReminderKitSection] = [], readableDatabase: Bool = true
+    readsThroughReminderKit: Bool = true, moreSections: [ReminderKitSection] = [], ordering: String? = nil,
+    readableDatabase: Bool = true
   ) throws {
     builder = try Builder()
     let sectionRows = moreSections.enumerated().map { offset, section in
@@ -125,6 +127,8 @@ private struct Setup {
       \(Builder.blob(utf8: storedData)), NULL, NULL);
       INSERT INTO ZREMCDBASESECTION VALUES (11, 3, 0, 7, \(Builder.blob(dairyID)), 'Dairy', 782000000);
       \(sectionRows)
+      ALTER TABLE ZREMCDBASELIST ADD COLUMN ZSECTIONIDSORDERINGASDATA BLOB;
+      UPDATE ZREMCDBASELIST SET ZSECTIONIDSORDERINGASDATA = \(ordering.map { Builder.blob(utf8: $0) } ?? "NULL");
       """)
     store = AppleSectionStore(
       database: DatabaseSectionStore(
@@ -161,64 +165,93 @@ struct AppleSectionStoreTests {
     #expect(await setup.store.manualReminderOrder(of: groceries) == [milkID])
     #expect(
       setup.log.withLock { $0 } == [
-        "sections: reminderkit fetchListSectionsInList:error:; order: sectionIDsOrderingAsData",
+        "sections: reminderkit fetchListSectionsInList:error:; order: reminderkit sectionIDsOrderingAsData",
         "memberships: reminderkit membershipsOfRemindersInSectionsAsData",
         "manual order: reminderkit sortingStyle, reminderIDsOrdering",
       ])
   }
 
-  /// Grocery on the Mac: no stored order (NULL), and ReminderKit fetched the sections newest first.
-  private static let grocery = ["Personal Care & Health", "Bakery", "Produce", "Breads & Cereals"].map {
-    ReminderKitSection(id: UUID().uuidString, displayName: $0)
+  /// The scratch list on the Mac, as captured (`pr8-fixtures-after-reorder`): Alpha, Beta and Gamma created in that
+  /// order, then arranged Gamma, Alpha, Beta.
+  private static let scratch = [
+    ReminderKitSection(id: "ABCECB2F-5CED-4351-8028-5CE6774B6C9B", displayName: "Alpha"),
+    ReminderKitSection(id: "CE743022-A15F-4347-AA00-877C21C65423", displayName: "Beta"),
+    ReminderKitSection(id: "EB33B981-786B-420F-8E73-70512A532667", displayName: "Gamma"),
+  ]
+  private static let scratchOrdering =
+    #"{"orderedIdentifiers":["EB33B981-786B-420F-8E73-70512A532667","ABCECB2F-5CED-4351-8028-5CE6774B6C9B","#
+    + #""CE743022-A15F-4347-AA00-877C21C65423"],"minimumSupportedVersion":20230430}"#
+
+  /// Grocery on the Mac (`pr8-grocery`): sections by `Z_PK`, which is the app's order; its stored order is NULL.
+  /// ReminderKit fetched them in reverse, and their `creationDate`s ascend in that fetch order.
+  private static let grocery = [
+    ReminderKitSection(id: "F3931B94-08B5-43C1-B332-20E95EEF1CCE", displayName: "Personal Care & Health"),
+    ReminderKitSection(id: "3E6B8719-9921-4B5D-99CA-F11AF351B23B", displayName: "Bakery"),
+    ReminderKitSection(id: "C47A9B40-54DC-4F73-B0F1-A41E545465EE", displayName: "Produce"),
+    ReminderKitSection(id: "356FB2F0-F3E6-4281-A0D1-E22481E481B1", displayName: "Breads & Cereals"),
+  ]
+  private static var groceryAsFetched: [ReminderKitSection] {
+    grocery.reversed().enumerated().map { offset, section in
+      var dated = section
+      dated.createdAt = Date(timeIntervalSinceReferenceDate: 780_000_000 + Double(offset))
+      return dated
+    }
   }
 
-  @Test("without a stored order, sections go in creation order by ReminderKit's creation dates")
-  func creationDates() async throws {
-    let setup = try Setup(readableDatabase: false)
-    setup.reminderKit.state.withLock {
-      $0.sections = Self.grocery.enumerated().reversed().map { offset, section in
-        var dated = section
-        dated.createdAt = Date(timeIntervalSinceReferenceDate: 780_000_000 + Double(offset))
-        return dated
-      }
-      $0.creationDateSelector = "creationDate"
-    }
+  @Test("when ReminderKit has no stored order, the database's arranged order is used (the scratch list)")
+  func databaseStoredOrder() async throws {
+    let setup = try Setup(moreSections: Self.scratch, ordering: Self.scratchOrdering)
+    setup.reminderKit.state.withLock { $0.sections = Self.scratch }
     let names = try await setup.store.sections(in: groceries).map(\.displayName)
-    #expect(names == Self.grocery.map(\.displayName))
+    #expect(names == ["Gamma", "Alpha", "Beta"])
     #expect(
       setup.log.withLock { $0.last }
-        == "sections: reminderkit fetchListSectionsInList:error:; order: none, then creation date (creationDate)")
+        == "sections: reminderkit fetchListSectionsInList:error:; order: none in reminderkit, "
+        + "database (ZSECTIONIDSORDERINGASDATA, then Z_PK)")
   }
 
-  @Test("without a stored order or creation dates, sections follow the database's creation order")
-  func databaseCreationOrder() async throws {
+  @Test("an order ReminderKit exposes wins, and sections it doesn't name follow in the database's order")
+  func reminderKitStoredOrder() async throws {
+    let setup = try Setup(moreSections: Self.scratch)
+    setup.reminderKit.state.withLock {
+      $0.sections = Self.scratch
+      $0.storedOrder = [Self.scratch[2].id]
+    }
+    #expect(try await setup.store.sections(in: groceries).map(\.displayName) == ["Gamma", "Alpha", "Beta"])
+    #expect(
+      setup.log.withLock { $0.last }?.hasSuffix(
+        "order: reminderkit sectionIDsOrderingAsData, then database (ZSECTIONIDSORDERINGASDATA, then Z_PK)") == true)
+  }
+
+  @Test("without a stored order, Grocery follows the database's Z_PK order, not creationDate or the fetch order")
+  func groceryFromDatabase() async throws {
     let setup = try Setup(moreSections: Self.grocery)
     setup.reminderKit.state.withLock {
-      $0.sections = Self.grocery.reversed() + [ReminderKitSection(id: dairyID, displayName: "Dairy")]
+      $0.sections = Self.groceryAsFetched
+      $0.creationDateSelector = "creationDate"
     }
-    let names = try await setup.store.sections(in: groceries).map(\.displayName)
-    #expect(names == ["Dairy"] + Self.grocery.map(\.displayName))
-    #expect(setup.log.withLock { $0.last }?.hasSuffix("order: none, then database order (Z_PK)") == true)
+    #expect(try await setup.store.sections(in: groceries).map(\.displayName) == Self.grocery.map(\.displayName))
+    #expect(setup.log.withLock { $0.last }?.hasSuffix("database (ZSECTIONIDSORDERINGASDATA, then Z_PK)") == true)
   }
 
-  @Test("with nothing else to go on, sections are in reverse fetch order, as ReminderKit fetches newest first")
+  @Test("with the database unreadable, Grocery goes newest creationDate first, which is the app's order")
+  func groceryByCreationDate() async throws {
+    let setup = try Setup(readableDatabase: false)
+    setup.reminderKit.state.withLock {
+      $0.sections = Self.groceryAsFetched
+      $0.creationDateSelector = "creationDate"
+    }
+    #expect(try await setup.store.sections(in: groceries).map(\.displayName) == Self.grocery.map(\.displayName))
+    #expect(
+      setup.log.withLock { $0.last }?.hasSuffix("reminderkit creationDate, newest first (database unreadable)") == true)
+  }
+
+  @Test("with nothing else to go on, sections are in reverse fetch order")
   func reversedFetchOrder() async throws {
     let setup = try Setup(readableDatabase: false)
     setup.reminderKit.state.withLock { $0.sections = Self.grocery.reversed() }
-    let names = try await setup.store.sections(in: groceries).map(\.displayName)
-    #expect(names == Self.grocery.map(\.displayName))
-    #expect(setup.log.withLock { $0.last }?.hasSuffix("order: none, then reversed fetch order") == true)
-  }
-
-  @Test("sections the stored order doesn't name follow it in creation order")
-  func partlyStoredOrder() async throws {
-    let setup = try Setup(readableDatabase: false)
-    setup.reminderKit.state.withLock {
-      $0.sections = Self.grocery.reversed()
-      $0.storedOrder = [Self.grocery[2].id]
-    }
-    let names = try await setup.store.sections(in: groceries).map(\.displayName)
-    #expect(names == ["Produce", "Personal Care & Health", "Bakery", "Breads & Cereals"])
+    #expect(try await setup.store.sections(in: groceries).map(\.displayName) == Self.grocery.map(\.displayName))
+    #expect(setup.log.withLock { $0.last }?.hasSuffix("reversed fetch order (database unreadable)") == true)
   }
 
   @Test("reads fall back to the database when ReminderKit can't answer, and say why")

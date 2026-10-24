@@ -30,14 +30,7 @@ enum SectionFixtures {
   static let memberships =
     #"{"minimumSupportedVersion":20230430,"memberships":[{"memberID":"\#(milkID)","groupID":"\#(dairyID)","modifiedOn":782900000.123456},{"memberID":"\#(applesID)","groupID":"\#(produceID)","modifiedOn":782900100}]}"#
 
-  /// A token map with counters for the membership checksum, the reminder ordering and an unrelated field.
-  static let tokenMap =
-    #"{"map":{"membershipsOfRemindersInSectionsChecksum":{"counter":3,"modificationTime":782900100,"replicaID":"0D5E8F4A-1B2C-4D3E-9F5A-6B7C8D9E0F1A"},"name":{"counter":1,"modificationTime":780000000,"replicaID":"0D5E8F4A-1B2C-4D3E-9F5A-6B7C8D9E0F1A"},"reminderIDsMergeableOrdering":{"counter":7,"modificationTime":782900100,"replicaID":"0D5E8F4A-1B2C-4D3E-9F5A-6B7C8D9E0F1A"}}}"#
-
-  static var stored: StoredMemberships {
-    StoredMemberships(
-      data: memberships, checksum: SectionMemberships.checksum(of: memberships), tokenMap: tokenMap)
-  }
+  static var stored: StoredMemberships { StoredMemberships(data: memberships) }
 
   static let reminders = [
     Reminder(id: milkID, title: "Milk", listID: groceries.id, listName: "Groceries"),

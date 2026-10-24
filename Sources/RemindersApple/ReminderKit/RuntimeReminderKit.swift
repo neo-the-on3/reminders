@@ -30,6 +30,14 @@
       try withSession { session throws(RemindersError) in try session.deleteSection(id: id, in: list) }
     }
 
+    public func assign(reminderID: String, toSectionID sectionID: String, in list: ReminderList)
+      throws(RemindersError)
+    {
+      try withSession { session throws(RemindersError) in
+        try session.assign(reminderID: reminderID, toSectionID: sectionID, in: list)
+      }
+    }
+
     /// Runs `body` on a fresh session, draining what ReminderKit autoreleases.
     private func withSession<T>(_ body: (ReminderKitSession) throws(RemindersError) -> T) throws(RemindersError)
       -> T
@@ -132,6 +140,34 @@
     }
   }
 
+  extension ReminderKitSession {
+    /// Puts a reminder in a section the way the Reminders app does: a membership handed to the list's sections
+    /// context in one save request. Reminders merges it into the list's membership data (the newest membership of
+    /// a reminder wins), writes that data's checksum, and syncs it.
+    func assign(reminderID: String, toSectionID sectionID: String, in list: ReminderList) throws(RemindersError) {
+      guard let member = UUID(uuidString: reminderID), let group = UUID(uuidString: sectionID) else {
+        throw RemindersError(.invalidArgument, "Not a reminder and section identifier: \(reminderID), \(sectionID)")
+      }
+      let (storage, account) = try storage(of: list)
+      guard try sections(of: storage).contains(where: { Runtime.identifier(of: $0) == group.uuidString }) else {
+        throw RemindersError(.sectionNotFound, "ReminderKit has no section \(sectionID) in \"\(list.title)\"")
+      }
+      // Everything is checked and built before the one save; a failure on the way saves nothing.
+      let membership = try Runtime.membership(member: member, group: group, modifiedOn: Date())
+      let memberships = try Runtime.make("REMMemberships", "initWithMemberships:", [membership] as NSArray)
+      let request = try Runtime.make("REMSaveRequest", initWithStore: store)
+      try Runtime.require(["saveSynchronouslyWithError:"], on: request)
+      let listChange = try Runtime.listChangeItem(
+        request: request, storage: storage, capabilities: Runtime.object(account, "capabilities"))
+      guard let sectionsContext = try Runtime.send("sectionsContextChangeItem", to: listChange) else {
+        throw RemindersError.reminderKitFailed("move the reminder", "the list has no sections context")
+      }
+      try Runtime.require(["setUnsavedMembershipsOfRemindersInSections:"], on: sectionsContext)
+      _ = try Runtime.send("setUnsavedMembershipsOfRemindersInSections:", to: sectionsContext, memberships)
+      try Runtime.save(request, "move the reminder to the section in \"\(list.title)\"")
+    }
+  }
+
   /// Checked Objective-C runtime calls.
   private enum Runtime {
     static func loadFramework() throws(RemindersError) {
@@ -167,6 +203,30 @@
         throw .reminderKitUnavailable("\(name) refused initWithStore:")
       }
       return object
+    }
+
+    /// A new instance of class `name`, initialised with `initializer`, which takes one object.
+    static func make(_ name: String, _ initializer: String, _ argument: AnyObject) throws(RemindersError) -> NSObject {
+      let allocated = try allocate(name)
+      guard let object = try send(initializer, to: allocated, argument) else {
+        throw .reminderKitUnavailable("\(name) refused \(initializer)")
+      }
+      return object
+    }
+
+    /// A `REMMembership`: the reminder `member` in the section `group`, set at `modifiedOn`.
+    static func membership(member: UUID, group: UUID, modifiedOn: Date) throws(RemindersError) -> NSObject {
+      let name = "initWithMemberIdentifier:groupIdentifier:isObsolete:modifiedOn:"
+      let allocated = try allocate("REMMembership")
+      let (selector, imp) = try implementation(name, on: allocated)
+      typealias Initializer =
+        @convention(c) (AnyObject, Selector, AnyObject, AnyObject, ObjCBool, AnyObject) -> AnyObject?
+      let initialize = unsafeBitCast(imp, to: Initializer.self)
+      guard
+        let membership = initialize(
+          allocated, selector, member as NSUUID, group as NSUUID, false, modifiedOn as NSDate) as? NSObject
+      else { throw .reminderKitUnavailable("REMMembership refused \(name)") }
+      return membership
     }
 
     private static func allocate(_ name: String) throws(RemindersError) -> NSObject {

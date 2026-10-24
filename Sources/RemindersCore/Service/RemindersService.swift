@@ -142,7 +142,7 @@ public struct RemindersService: Sendable {
     var message = "Added \"\(request.title)\" to \"\(list.title)\""
     if let section {
       do {
-        try await editMemberships(of: list) { $0.assign(Self.memberID(id), to: section.id, at: clock.now) }
+        try await sectionStore.assign(reminderID: Self.memberID(id), to: section, in: list)
       } catch {
         throw RemindersError(
           error.code,

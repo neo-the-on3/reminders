@@ -84,7 +84,7 @@ struct MCPSetupFileClientTests {
     #expect(absent.backupPath == nil)
   }
 
-  @Test("removing keeps a file with anything else in it, empty mcpServers included; a symlinked one stays")
+  @Test("removing keeps a file with anything else in it, dropping the emptied mcpServers; a symlinked one stays")
   func removeKeeps() throws {
     let machine = try Machine()
     let other = machine.home.file("other.json")
@@ -92,7 +92,8 @@ struct MCPSetupFileClientTests {
       #"{"mcpServers": {"reminders": {"command": "\#(binary)", "args": ["--mcp"]}}, "theme": "dark"}"#, to: other)
     let kept = try machine.setup.configure(.claudeDesktop, at: other, SetupOptions(remove: true))
     #expect(!kept.fileDeleted)
-    #expect(try ConfigFile.read(other) == #"{"mcpServers": {}, "theme": "dark"}"#)
+    #expect(!kept.fileKeptForSymlink)
+    #expect(try ConfigFile.read(other) == #"{"theme": "dark"}"#)
 
     let target = machine.home.file("dotfiles/mcp.json")
     try ConfigFile.write(#"{"mcpServers": {"reminders": {"command": "\#(binary)", "args": ["--mcp"]}}}"#, to: target)
@@ -101,8 +102,13 @@ struct MCPSetupFileClientTests {
     let linked = try machine.setup.configure(.claudeDesktop, at: link, SetupOptions(remove: true))
     #expect(linked.outcome == .removed)
     #expect(!linked.fileDeleted)
+    #expect(linked.fileKeptForSymlink)
+    #expect(linked.text(using: TextRenderer()).contains("left as an empty config rather than deleted"))
     #expect(ConfigFile.isSymbolicLink(link))
     #expect(try ConfigFile.read(link) == #"{"mcpServers": {}}"#)
+    let wouldKeep = try machine.setup.configure(.claudeDesktop, at: link, SetupOptions(dryRun: true, remove: true))
+    #expect(wouldKeep.outcome == .absent)
+    #expect(!wouldKeep.fileKeptForSymlink)
   }
 
   @Test("Cursor: the global file by default, a project's with --project, with a stdio type")

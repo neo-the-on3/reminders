@@ -134,7 +134,6 @@ struct MCPConfigDocumentTests {
       #"{"mcpServers":{"filesystem":{"command":"npx","args":["-y"]}},"theme":"dark"}"#,
       #"{ "mcpServers": { "a": { "command": "a" } } }"# + "\n",
       "{\r\n  \"mcpServers\": {\r\n    \"a\": {\"command\": \"a\"}\r\n  }\r\n}\r\n",
-      "{\n  \"mcpServers\": {},\n  \"theme\": \"dark\"\n}",
     ])
   func roundTrip(original: String) throws {
     let added = try #require(try MCPConfigDocument(original, path: path).adding(entry, force: false).text)
@@ -173,7 +172,29 @@ struct MCPConfigDocumentTests {
           #"{"command": "/old/reminders", "args": ["--mcp"]}"#,
           with: #"{"command":"\#(entry.command)","args":["--mcp"]}"#))
     let only = #"{"mcpServers": {"reminders": {"command": "/old/reminders"}}, "x": 1}"#
-    #expect(try MCPConfigDocument(only, path: path).removing(entry, force: true).text == #"{"mcpServers": {}, "x": 1}"#)
+    #expect(try MCPConfigDocument(only, path: path).removing(entry, force: true).text == #"{"x": 1}"#)
+  }
+
+  @Test("an mcpServers emptied by removing reminders goes too, so add then remove gives other keys back as they were")
+  func emptiedServersGo() throws {
+    for original in [#"{"keep":1}"#, "{\n  \"keep\": 1\n}\n", #"{"a": 1, "b": [2]}"#] {
+      let added = try #require(try MCPConfigDocument(original, path: path).adding(entry, force: false).text)
+      let removed = try MCPConfigDocument(added, path: path).removing(entry, force: false)
+      #expect(removed.text == original)
+      #expect(!removed.leavesNothing)
+    }
+    let first = #"{"mcpServers": {"reminders": {"command": "x"}}, "theme": "dark"}"#
+    #expect(try MCPConfigDocument(first, path: path).removing(entry, force: true).text == #"{"theme": "dark"}"#)
+    // There's no telling an empty table that was already there from one setup added; neither configures anything.
+    let emptyTable = "{\n  \"mcpServers\": {},\n  \"theme\": \"dark\"\n}"
+    let filled = try #require(try MCPConfigDocument(emptyTable, path: path).adding(entry, force: false).text)
+    #expect(
+      try MCPConfigDocument(filled, path: path).removing(entry, force: false).text == "{\n  \"theme\": \"dark\"\n}")
+    // Two mcpServers keys can't be spliced; the file is rendered whole, without either.
+    let twice = #"{"mcpServers": {}, "theme": "dark", "mcpServers": {"reminders": {"command": "x"}}}"#
+    let rendered = try #require(try MCPConfigDocument(twice, path: path).removing(entry, force: true).text)
+    #expect(!rendered.contains("reminders"))
+    #expect(rendered.contains("theme"))
   }
 
   @Test("removing the last thing in the file says nothing is left; other servers or keys keep it")

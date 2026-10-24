@@ -92,10 +92,17 @@ public struct MCPConfigDocument: Sendable {
       throw Self.conflict(path, existing, fix: "remove it anyway (the file is backed up first)")
     }
     servers[MCPServerEntry.name] = nil
-    // Other keys mean someone else's settings: keep them and the (now empty) `mcpServers`, since there's no telling
-    // whether setup added it.
-    let leavesNothing = servers.objectValue?.isEmpty == true && root.objectValue?.count == 1
-    return Edit(outcome: .removed, text: splicedRemoval() ?? rendering(servers), leavesNothing: leavesNothing)
+    let emptied = servers.objectValue?.isEmpty == true
+    guard emptied, (root.objectValue?.count ?? 0) > 1 else {
+      return Edit(
+        outcome: .removed, text: splicedRemoval() ?? rendering(servers), leavesNothing: emptied)
+    }
+    // Other keys are someone else's settings and stay; the emptied `mcpServers` goes with the entry, so a file
+    // setup added it to reads as it did before. An empty table configures nothing, so dropping one that was
+    // already there loses nothing either.
+    var trimmed = root
+    trimmed["mcpServers"] = nil
+    return Edit(outcome: .removed, text: splicedServersRemoval() ?? trimmed.pretty(indent: indent) + "\n")
   }
 
   // MARK: Splicing
@@ -142,7 +149,20 @@ public struct MCPConfigDocument: Sendable {
     let matches = members.indices.filter { members[$0].key == MCPServerEntry.name }
     guard matches.count == 1, let index = matches.first else { return nil }
     if members.count == 1 { return splicing(servers.open..<servers.close + 1, with: "{}") }
-    // Take the separator before the entry, or after it when it comes first.
+    return removing(member: index, of: members)
+  }
+
+  /// The text without the root's `mcpServers` member; nil unless there's exactly one, among other members.
+  private func splicedServersRemoval() -> String? {
+    guard let root = rootLayout else { return nil }
+    let members = root.members
+    let matches = members.indices.filter { members[$0].key == "mcpServers" }
+    guard matches.count == 1, let index = matches.first, members.count > 1 else { return nil }
+    return removing(member: index, of: members)
+  }
+
+  /// The text without `members[index]` and one separator: the one before it, or after it when it comes first.
+  private func removing(member index: Int, of members: [JSONObjectLayout.Member]) -> String? {
     if index > 0 { return splicing(members[index - 1].end..<members[index].end, with: "") }
     return splicing(members[0].start..<members[1].start, with: "")
   }

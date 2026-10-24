@@ -41,7 +41,7 @@ brew install neo-the-on3/tap/reminders
 reminders authorize
 ```
 
-This is an **alpha** pre-release: lists and reminders work, sections are partly there (see the status above). It needs
+This is an **alpha** pre-release: lists, reminders and sections work (see the status above). It needs
 macOS 26 or later and runs natively on Apple silicon and Intel (a universal binary).
 
 - The binary is **ad-hoc signed, not notarized**. Homebrew doesn't quarantine what it downloads, so macOS runs it
@@ -394,6 +394,12 @@ tool. Intentional differences:
   alike; the original's JSON kept Reminders' own order. The exception is `list` on a list sorted manually in
   Reminders: it keeps the arranged order (from ReminderKit's `reminderIDsOrdering`) within each section, which the
   original never read.
+- **Section order** is the order ReminderKit fetches sections in, which follows the order arranged in Reminders
+  (new sections last). A list whose sections were never arranged comes back oldest first, while the app shows
+  newest first, so an order that is exactly oldest first by creation date is shown reversed. **Known limitation:**
+  sections deliberately arranged oldest first look the same and are shown newest first. ReminderKit (macOS 26 and
+  27) exposes no getter for the stored order to tell the two apart; `reminders debug-reminderkit --list <name>
+  --all-selectors` shows whether a later macOS adds one.
 - **MCP results** are the CLI's `--json` data, wrapped in an object where it is a list (`{"lists": …}`,
   `{"reminders": …}`), because MCP structured content must be an object. Confirmations are the CLI's messages,
   such as `Completed "Buy milk" in "Groceries"`. Failures are `isError` results carrying the error code rather

@@ -15,7 +15,7 @@
     public init() {}
 
     public func sections(in list: ReminderList) throws(RemindersError) -> [ReminderKitSection] {
-      try withSession { session in
+      try withSession { session throws(RemindersError) in
         try session.sections(of: session.storage(of: list).list).compactMap(ReminderKitSession.section)
       }
     }
@@ -23,11 +23,11 @@
     public func createSection(named name: String, in list: ReminderList) throws(RemindersError)
       -> ReminderKitSection
     {
-      try withSession { try $0.createSection(named: name, in: list) }
+      try withSession { session throws(RemindersError) in try session.createSection(named: name, in: list) }
     }
 
     public func deleteSection(id: String, in list: ReminderList) throws(RemindersError) {
-      try withSession { try $0.deleteSection(id: id, in: list) }
+      try withSession { session throws(RemindersError) in try session.deleteSection(id: id, in: list) }
     }
 
     /// Runs `body` on a fresh session, draining what ReminderKit autoreleases.
@@ -35,10 +35,10 @@
       -> T
     {
       let result: Result<T, RemindersError> = autoreleasepool {
-        do {
+        do throws(RemindersError) {
           return .success(try body(try ReminderKitSession()))
         } catch {
-          return .failure(RemindersError(wrapping: error))
+          return .failure(error)
         }
       }
       return try result.get()
@@ -96,7 +96,9 @@
       let request = try Runtime.make("REMSaveRequest", initWithStore: store)
       let listChange = try Runtime.listChangeItem(
         request: request, storage: storage, capabilities: Runtime.object(account, "capabilities"))
-      let sectionsContext = try Runtime.send("sectionsContextChangeItem", to: listChange)
+      guard let sectionsContext = try Runtime.send("sectionsContextChangeItem", to: listChange) else {
+        throw RemindersError.reminderKitFailed("create section \"\(name)\"", "the list has no sections context")
+      }
       let added = try Runtime.send(
         "addListSectionWithDisplayName:toListSectionContextChangeItem:", to: request, name as NSString,
         sectionsContext)
@@ -212,10 +214,13 @@
       var error: NSError?
       let result: AnyObject?
       if let argument {
-        typealias Fetch = @convention(c) (AnyObject, Selector, AnyObject, UnsafeMutablePointer<NSError?>) -> AnyObject?
+        typealias Fetch =
+          @convention(c) (AnyObject, Selector, AnyObject, AutoreleasingUnsafeMutablePointer<NSError?>)
+          -> AnyObject?
         result = unsafeBitCast(imp, to: Fetch.self)(object, selector, argument, &error)
       } else {
-        typealias Fetch = @convention(c) (AnyObject, Selector, UnsafeMutablePointer<NSError?>) -> AnyObject?
+        typealias Fetch =
+          @convention(c) (AnyObject, Selector, AutoreleasingUnsafeMutablePointer<NSError?>) -> AnyObject?
         result = unsafeBitCast(imp, to: Fetch.self)(object, selector, &error)
       }
       guard let objects = result as? [NSObject] else {
@@ -227,7 +232,7 @@
     /// Saves `request`, waiting until Reminders has it.
     static func save(_ request: NSObject, _ action: String) throws(RemindersError) {
       let (selector, imp) = try implementation("saveSynchronouslyWithError:", on: request)
-      typealias Save = @convention(c) (AnyObject, Selector, UnsafeMutablePointer<NSError?>) -> ObjCBool
+      typealias Save = @convention(c) (AnyObject, Selector, AutoreleasingUnsafeMutablePointer<NSError?>) -> ObjCBool
       var error: NSError?
       guard unsafeBitCast(imp, to: Save.self)(request, selector, &error).boolValue else {
         throw .reminderKitFailed(action, error?.localizedDescription ?? "the save failed")

@@ -9,19 +9,10 @@ public struct Diagnostics: Sendable {
   }
 
   /// Runs every check. Never shows the Reminders prompt (it would wait for an answer); `authorize` does that.
-  public func checkHealth(includeDatabaseStats: Bool = false, includeSync: Bool = false) async -> HealthReport {
-    var checks = [operatingSystemCheck(), infoPlistCheck(), hostCheck(), reminderKitCheck()]
-    if includeDatabaseStats {
-      checks.append(
-        HealthCheck(
-          "Database stats", .warn, "Not available yet", detail: "Database statistics arrive with section support"))
-    }
-    if includeSync {
-      checks.append(
-        HealthCheck("Sync", .warn, "Not available yet", detail: "Sync checks arrive with section support"))
-    }
-    checks.append(await accessCheck())
-    return HealthReport(checks)
+  /// Only what applies is checked: this tool never reads Reminders' database or triggers a sync itself, so
+  /// there's no database, store or sync to report on.
+  public func checkHealth() async -> HealthReport {
+    HealthReport([operatingSystemCheck(), infoPlistCheck(), hostCheck(), reminderKitCheck(), await accessCheck()])
   }
 
   /// The guidance for this process: who holds the permissions and what to do about each access state.

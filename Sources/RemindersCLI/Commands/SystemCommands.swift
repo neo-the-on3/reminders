@@ -34,13 +34,15 @@ struct Authorize: ConsoleCommand {
 struct Doctor: ConsoleCommand {
   static let configuration = CommandConfiguration(abstract: "Check system health and diagnostics")
   @OptionGroup var globals: GlobalOptions
-  @Flag(help: "Verify sync status") var sync = false
-  @Flag(name: .customLong("db"), help: "Show database location and stats") var databaseStats = false
+  // The original's --sync and --db are accepted so scripts keep working, but there's nothing for them to show:
+  // this tool never reads Reminders' database, and Reminders syncs its own changes.
+  @Flag(help: .hidden) var sync = false
+  @Flag(name: .customLong("db"), help: .hidden) var databaseStats = false
 
   /// Exits 1 when a check fails, in text and JSON mode alike.
   func run(in context: CommandContext) async throws {
     let diagnostics = Diagnostics(service: context.service, system: context.system)
-    let report = await diagnostics.checkHealth(includeDatabaseStats: databaseStats, includeSync: sync)
+    let report = await diagnostics.checkHealth()
     context.console.show(report, failure: report.failure)
     if !report.passed { throw ExitCode.failure }
   }

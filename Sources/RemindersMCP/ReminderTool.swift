@@ -64,7 +64,7 @@ public enum ReminderTool: String, CaseIterable, Sendable {
     case .sections: "List the sections in a reminder list, in Reminders' order"
     case .createSection: "Create a section in a list; an existing section with exactly that name is reused"
     case .deleteSection: "Delete a section from a list; its reminders stay in the list"
-    case .move: "Move a reminder to a different section "
+    case .move: "Move a reminder to a different section"
     case .today: "Show incomplete reminders due today"
     case .overdue: "Show incomplete reminders due before today"
     case .upcoming:

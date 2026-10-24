@@ -40,6 +40,14 @@ struct ToolCatalogTests {
     }
   }
 
+  @Test("titles and descriptions have no stray whitespace at either end")
+  func trimmedText() {
+    for tool in ReminderTool.allCases {
+      let texts = [tool.definition.description ?? "", tool.definition.annotations.title ?? ""]
+      #expect(texts.allSatisfy { $0 == $0.trimmingCharacters(in: .whitespacesAndNewlines) }, "\(tool.rawValue)")
+    }
+  }
+
   @Test("annotations mark queries read-only and deletions destructive")
   func annotations() {
     #expect(ReminderTool.search.definition.annotations.readOnlyHint == true)

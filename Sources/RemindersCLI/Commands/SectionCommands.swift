@@ -18,7 +18,7 @@ struct Move: ConsoleCommand {
   @Option(help: "Target section name") var toSection: String
 
   func run(in context: CommandContext) async throws {
-    throw RemindersError.notImplemented("move")
+    context.console.show(try await context.service.move(reminder.reference(), toSection: toSection))
   }
 }
 

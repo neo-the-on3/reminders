@@ -149,4 +149,25 @@ struct DatabaseSectionStoreTests {
     #expect(dairy.reminders.map(\.title) == ["Milk"])
     #expect(dairy.reminders.first?.section == "Dairy")
   }
+
+  @Test("sections follow the list's arranged order; a NULL or unreadable order falls back to creation order")
+  func arrangedOrder() async throws {
+    func sections(ordering: String) async throws -> [Section] {
+      let builder = try Builder()
+      let sql =
+        groceriesSQL() + """
+          ALTER TABLE ZREMCDBASELIST ADD COLUMN ZSECTIONIDSORDERINGASDATA BLOB;
+          UPDATE ZREMCDBASELIST SET ZSECTIONIDSORDERINGASDATA = \(ordering) WHERE Z_PK = 7;
+          """
+      return try await store([try builder.database("local", sql)]).sections(in: groceries)
+    }
+    let arranged = Builder.blob(
+      utf8: #"{"orderedIdentifiers":["\#(produceID)","\#(dairyID)"],"minimumSupportedVersion":20230430}"#)
+    let produceFirst = try await sections(ordering: arranged)
+    #expect(produceFirst.map(\.displayName) == ["Produce", "Dairy"])
+    #expect(produceFirst.map(\.sortOrder) == [0, 1])
+    #expect(try await sections(ordering: "NULL").map(\.displayName) == ["Dairy", "Produce"])
+    #expect(try await sections(ordering: Builder.blob(utf8: "{")).map(\.displayName) == ["Dairy", "Produce"])
+    #expect(try await sections(ordering: "'not json'").map(\.displayName) == ["Dairy", "Produce"])
+  }
 }

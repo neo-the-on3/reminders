@@ -1,3 +1,5 @@
+import Foundation
+
 /// Rows of the Reminders database that sections are read from, whatever reads them.
 ///
 /// Reminders keeps lists in `ZREMCDBASELIST`, sections in `ZREMCDBASESECTION` and identifiers as 16-byte blobs.
@@ -60,12 +62,35 @@ public enum DatabaseRows {
     return named.count == 1 ? named.first : nil
   }
 
-  /// The list's live sections in creation order (by `Z_PK`), numbered from 0.
-  public static func sections(_ rows: some Collection<Section>, inList listName: String) -> [RemindersCore.Section] {
+  /// The list's live sections, numbered from 0, in the order the user arranged them in Reminders.
+  ///
+  /// - Parameter ordering: The list's `ZSECTIONIDSORDERINGASDATA`. Sections are ordered as in its
+  ///   `orderedIdentifiers`; sections it doesn't name follow in creation order (by `Z_PK`), and identifiers of
+  ///   sections that no longer exist are skipped. Without it, or when it can't be read, all sections are in
+  ///   creation order.
+  public static func sections(
+    _ rows: some Collection<Section>, inList listName: String, ordering: [UInt8]? = nil
+  ) -> [RemindersCore.Section] {
     let live = rows.filter { !$0.isMarkedForDeletion && $0.identifier != nil && $0.displayName != nil }
-    return live.sorted { $0.key < $1.key }.enumerated().map { order, row in
+    let byCreation = live.sorted { $0.key < $1.key }
+    let positions = Dictionary(
+      sectionOrder(ordering).enumerated().map { ($0.element.uppercased(), $0.offset) },
+      uniquingKeysWith: { first, _ in first })
+    func rank(_ row: (offset: Int, element: Section)) -> (Int, Int) {
+      (positions[row.element.identifier?.uppercased() ?? ""] ?? positions.count + row.offset, row.offset)
+    }
+    let arranged = byCreation.enumerated().sorted { rank($0) < rank($1) }.map(\.element)
+    return arranged.enumerated().map { order, row in
       RemindersCore.Section(
         id: row.identifier ?? "", displayName: row.displayName ?? "", listName: listName, sortOrder: order)
     }
+  }
+
+  /// The section identifiers in a list's `ZSECTIONIDSORDERINGASDATA` JSON, in order; empty when there's none or
+  /// it can't be read.
+  static func sectionOrder(_ ordering: [UInt8]?) -> [String] {
+    struct Ordering: Decodable { var orderedIdentifiers: [String] }
+    guard let ordering, !ordering.isEmpty else { return [] }
+    return (try? JSONDecoder().decode(Ordering.self, from: Data(ordering)))?.orderedIdentifiers ?? []
   }
 }

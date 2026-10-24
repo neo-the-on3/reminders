@@ -8,7 +8,8 @@ assistants.
 > `search`, `add`, `complete`, `update`, `delete`, `create-list`, `delete-list`, `authorize` and `doctor` work
 > against Apple Reminders through EventKit, from the command line and as MCP tools; `setup-claude`,
 > `setup-claude-code` and `setup-cursor` register the MCP server with those clients. `sections` and
-> `list --section` read sections from the Reminders database (they need Full Disk Access); `create-section`,
+> `list --section` read sections through ReminderKit where it exposes them, and otherwise from the Reminders
+> database (which needs Full Disk Access; set `REMINDERS_SECTIONS_FROM_DATABASE=1` to always read it); `create-section`,
 > `delete-section`, `move` and `add --section` change them only through ReminderKit, Reminders' private framework
 > (this tool never writes the Reminders database), and are not yet verified against iCloud sync. `demo` arrives in
 > a follow-up PR; until then it fails with a structured `NOT_IMPLEMENTED` error.
@@ -236,8 +237,9 @@ Each tool runs the same operation as the CLI command, with the same name matchin
 | `reminders_move` | `list`, `title` or `id`, `toSection` | `{"message"}` |
 
 \* With `section`, the reminder is added and then moved into the section; if that second step fails, the error
-says the reminder was added. Reading sections needs Full Disk
-Access for the app running the server; without it, the section tools and a `section` filter fail with
+says the reminder was added. Reading sections falls back to the
+Reminders database where ReminderKit can't answer, which needs Full Disk Access for the app running the server;
+without it, the section tools and a `section` filter fail with
 `PERMISSION_DENIED`, and `reminders_list` still works, without section names. Creating and deleting sections and
 moving reminders into them also need ReminderKit; where it's missing or changed they fail with `REMINDERKIT_UNAVAILABLE`.
 
@@ -281,8 +283,8 @@ Five targets with one-way dependencies (`RemindersCLI` → `RemindersMCP`, `Remi
   EventKit objects never leave it (fetches convert to `Reminder` values, changes look items up by identifier).
   `DatabaseSectionStore` reads sections from Reminders' SQLite databases (one per account) through a
   `SQLiteDatabase` connection that is opened read-only, via the `CSQLite` system library (`libsqlite3-dev` on
-  Linux). `AppleSectionStore` adds creating and deleting sections, and moving reminders into them, through a
-  `ReminderKitBridge`, implemented
+  Linux). `AppleSectionStore` reads sections through a `ReminderKitBridge` (falling back to `DatabaseSectionStore`), and
+  creates and deletes sections and moves reminders into them only through it. The bridge is implemented
   by `RuntimeReminderKit`, which loads the private ReminderKit framework at run time (nothing links against it)
   and checks each class and method before calling it. `MacSystemProbe` provides the machine facts. It compiles everywhere: off macOS,
   `UnsupportedPlatformStore` answers every call with `UNSUPPORTED_PLATFORM`.

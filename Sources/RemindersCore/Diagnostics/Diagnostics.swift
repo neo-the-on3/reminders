@@ -10,7 +10,7 @@ public struct Diagnostics: Sendable {
 
   /// Runs every check. Never shows the Reminders prompt (it would wait for an answer); `authorize` does that.
   public func checkHealth(includeDatabaseStats: Bool = false, includeSync: Bool = false) async -> HealthReport {
-    var checks = [operatingSystemCheck(), infoPlistCheck(), hostCheck(), databaseCheck()]
+    var checks = [operatingSystemCheck(), infoPlistCheck(), hostCheck(), reminderKitCheck()]
     if includeDatabaseStats {
       checks.append(
         HealthCheck(
@@ -21,24 +21,21 @@ public struct Diagnostics: Sendable {
         HealthCheck("Sync", .warn, "Not available yet", detail: "Sync checks arrive with section support"))
     }
     checks.append(await accessCheck())
-    checks.append(
-      system.remindersDataDirectoryExists()
-        ? HealthCheck("Reminders data dir", .ok, "Exists")
-        : HealthCheck("Reminders data dir", .fail, "Not found", detail: system.remindersDataDirectory))
     return HealthReport(checks)
   }
 
   /// The guidance for this process: who holds the permissions and what to do about each access state.
   public var permissions: PermissionGuidance { PermissionGuidance(host: system.hostApplication) }
 
-  /// Asks for Reminders access (the system prompt) if the user hasn't decided yet, checks database access, and
-  /// opens System Settings for whatever is missing, narrating each step to `console`.
   /// Why `authorize` failed: the `PERMISSION_DENIED` (or `UNSUPPORTED_PLATFORM`) error for anything short of full
-  /// Reminders access; nil once it is granted. Database access is only needed for sections, so it doesn't count.
+  /// Reminders access; nil once it is granted.
   public func failure(of report: AuthorizationReport) -> RemindersError? {
     report.remindersAccess == .fullAccess ? nil : permissions.error(for: report.remindersAccess)
   }
 
+  /// Asks for Reminders access (the system prompt) if the user hasn't decided yet, and opens System Settings when
+  /// it's missing, narrating each step to `console`. Reminders access is the only permission needed: sections go
+  /// through ReminderKit, not Reminders' database.
   public func authorize(narratingTo console: Console) async -> AuthorizationReport {
     let style = console.style
     let name = ProductInfo.name
@@ -47,11 +44,11 @@ public struct Diagnostics: Sendable {
     let attribution =
       permissions.holderIsThisTool
       ? """
-      Here macOS grants these permissions to \(name) itself, not to the app that started it.
+      Here macOS grants Reminders access to \(name) itself, not to the app that started it.
       You only need to do this once.\n
       """
       : """
-      macOS grants these permissions to the app you run \(name) from (here: \(holder)),
+      macOS grants Reminders access to the app you run \(name) from (here: \(holder)),
       not to \(name) itself. You only need to do this once per app.\n
       """
     console.narrate(
@@ -62,7 +59,7 @@ public struct Diagnostics: Sendable {
       if !system.openSettings(pane) { console.narrate(style("     Go to: \(pane.location)\n", .dim)) }
     }
 
-    console.narrate("\n1. Checking Reminders access...\n")
+    console.narrate("\nChecking Reminders access...\n")
     let before = await service.store.accessStatus()
     if before == .notDetermined {
       console.narrate(style("   If a system dialog appears, click Allow.\n", .dim))
@@ -96,19 +93,7 @@ public struct Diagnostics: Sendable {
       open(.reminders, toEnable: "enable \(holder) under Reminders")
     }
 
-    console.narrate("\n2. Checking database access (for section features)...\n")
-    let database = try? system.remindersDatabaseFiles().first
-    if let database {
-      let file = database.split(separator: "/").last.map(String.init) ?? database
-      console.narrate("   \(style("✓", .green)) Database access granted (\(file))\n")
-    } else {
-      console.narrate(
-        style("   ✗ Database access not yet granted.\n", .yellow)
-          + "     Section features (create-section, move, etc.) need Full Disk Access for \(holder).\n")
-      open(.fullDiskAccess, toEnable: "add \(holder) to Full Disk Access")
-      console.narrate(style("     After enabling, \(permissions.afterChanging): run \(name) doctor.\n", .dim))
-    }
-    return AuthorizationReport(remindersAccess: access, databaseAccess: database != nil, host: system.hostApplication)
+    return AuthorizationReport(remindersAccess: access, host: system.hostApplication)
   }
 
   // MARK: Checks
@@ -144,19 +129,14 @@ public struct Diagnostics: Sendable {
       "Permissions app", .ok, host.isThisTool ? "\(host.name) (this tool)" : host.name, detail: host.bundlePath)
   }
 
-  private func databaseCheck() -> HealthCheck {
-    let hint =
-      "Run: \(ProductInfo.name) authorize (section features need Full Disk Access for \(permissions.holder))"
-    do {
-      guard let first = try system.remindersDatabaseFiles().first else {
-        return HealthCheck(
-          "Reminders database", .warn,
-          "Not accessible (No active Reminders database found in \(system.remindersDataDirectory))", detail: hint)
-      }
-      return HealthCheck("Reminders database", .ok, "Found", detail: first)
-    } catch {
-      return HealthCheck("Reminders database", .warn, "Not accessible (\(error.message))", detail: hint)
+  /// Sections need ReminderKit; everything else works without it.
+  private func reminderKitCheck() -> HealthCheck {
+    guard let problem = system.reminderKitProblem() else {
+      return HealthCheck("Sections (ReminderKit)", .ok, "Available")
     }
+    return HealthCheck(
+      "Sections (ReminderKit)", .warn, "Unavailable (\(problem))",
+      detail: "Everything except sections works; report it at \(ProductInfo.homepage)/issues with your macOS version")
   }
 
   private func accessCheck() async -> HealthCheck {

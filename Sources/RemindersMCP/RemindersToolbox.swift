@@ -46,14 +46,12 @@ public struct RemindersToolbox: Sendable {
     case .deleteList:
       return try await service.deleteList(named: arguments.string("list"))
     case .add:
-      if try arguments.optionalString("section") != nil {
-        throw RemindersError.notImplemented("Adding to a section (section)")
-      }
       return try await service.add(
         NewReminderRequest(
           list: arguments.string("list"), title: arguments.string("title"), due: arguments.optionalString("due"),
           priority: arguments.priority("priority") ?? .none, notes: arguments.optionalString("notes"),
-          repeatRule: arguments.optionalString("repeat")))
+          repeatRule: arguments.optionalString("repeat"),
+          section: arguments.optionalString("section").flatMap { $0.isEmpty ? nil : $0 }))
     case .complete:
       return try await service.complete(reference(arguments, for: tool))
     case .delete:
@@ -71,7 +69,7 @@ public struct RemindersToolbox: Sendable {
     case .deleteSection:
       return try await service.deleteSection(named: arguments.string("name"), inList: arguments.string("list"))
     case .move:
-      throw RemindersError.notImplemented("Sections (\(tool.rawValue))")
+      return try await service.move(reference(arguments, for: tool), toSection: arguments.string("toSection"))
     case .today:
       return RemindersResult(try await service.dueToday())
     case .overdue:

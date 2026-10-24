@@ -115,14 +115,18 @@
 
     func deleteSection(id: String, in list: ReminderList) throws(RemindersError) {
       let storage = try storage(of: list).list
-      guard let section = try sections(of: storage).first(where: { Runtime.identifier(of: $0) == id }) else {
+      guard let section = try sections(of: storage).first(where: { Runtime.identifier(of: $0) == id.uppercased() })
+      else {
         throw RemindersError(.sectionNotFound, "ReminderKit has no section \(id) in \"\(list.title)\"")
       }
       let request = try Runtime.make("REMSaveRequest", initWithStore: store)
+      // Everything the deletion needs is checked before it's staged; nothing is saved until the one save at the end.
+      try Runtime.require(["updateListSection:", "saveSynchronouslyWithError:"], on: request)
       // A tracked change, so the deletion syncs; removing the object alone wouldn't.
       guard let change = try Runtime.send("updateListSection:", to: request, section) else {
         throw RemindersError.reminderKitFailed("delete the section", "updateListSection: returned nothing")
       }
+      try Runtime.require(["removeFromList"], on: change)
       _ = try Runtime.send("removeFromList", to: change)
       try Runtime.save(request, "delete the section from \"\(list.title)\"")
     }
@@ -186,6 +190,13 @@
         throw .reminderKitUnavailable("REMListChangeItem refused \(name)")
       }
       return item
+    }
+
+    /// Throws ``RemindersError/Code/reminderKitUnavailable`` unless `object` responds to every one of `names`.
+    static func require(_ names: [String], on object: NSObject) throws(RemindersError) {
+      for name in names where !object.responds(to: NSSelectorFromString(name)) {
+        throw .reminderKitUnavailable("\(Swift.type(of: object)) doesn't respond to \(name)")
+      }
     }
 
     /// Sends a message taking up to two objects and returning one (or nothing).

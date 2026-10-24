@@ -41,15 +41,16 @@ extension RemindersService {
   }
 
   /// `reminders delete-section`. Its reminders stay in the list, outside any section.
+  ///
+  /// The list and section are resolved first, so a bad name deletes nothing; the deletion itself is one save.
+  /// Membership data isn't edited here: Reminders treats members of a deleted section as being in no section, and
+  /// reading ignores memberships of sections that no longer exist.
   public func deleteSection(named name: String, inList listName: String) async throws(RemindersError)
     -> Confirmation
   {
     let list = try await lists().resolve(listName)
     let section = try await sectionStore.sections(in: list).resolve(name)
     try await sectionStore.deleteSection(section, in: list)
-    // The section is gone either way: memberships of a deleted section are ignored when reading, so tidying them
-    // is best effort.
-    _ = try? await editMemberships(of: list) { $0.removeAll(inSection: section.id) }
     return Confirmation("Deleted section \"\(section.displayName)\" from \"\(list.title)\"")
   }
 

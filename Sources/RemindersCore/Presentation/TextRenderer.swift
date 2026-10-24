@@ -197,6 +197,21 @@ extension [Reminder] {
       }
     }.map(\.element)
   }
+
+  /// Grouped by section in `order`, keeping each group's order: sections not in `order` next, then reminders in
+  /// no section.
+  func grouped(bySectionOrder order: [String]) -> [Reminder] {
+    let positions = Dictionary(
+      order.enumerated().map { ($0.element, $0.offset) }, uniquingKeysWith: { first, _ in first })
+    func rank(of reminder: Reminder) -> Int {
+      guard let name = reminder.sectionName else { return order.count + 1 }
+      return positions[name] ?? order.count
+    }
+    return enumerated().sorted { lhs, rhs in
+      let (left, right) = (rank(of: lhs.element), rank(of: rhs.element))
+      return left != right ? left < right : lhs.offset < rhs.offset
+    }.map(\.element)
+  }
 }
 
 extension Sequence where Element: Hashable {

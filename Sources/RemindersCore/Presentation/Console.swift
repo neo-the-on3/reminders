@@ -157,8 +157,11 @@ public struct ReminderListing: ConsoleRepresentable {
   public var heading: String?
   public var layout: ReminderLayout
 
-  public init(_ reminders: [Reminder], heading: String?, layout: ReminderLayout) {
-    self.reminders = layout.sortByDueDate ? reminders.sortedByDueDate() : reminders
+  /// - Parameter sectionOrder: The list's section names in order. When given, reminders are grouped by section in
+  ///   that order, with those in no section last, so text and JSON both follow the list's sections.
+  public init(_ reminders: [Reminder], heading: String?, layout: ReminderLayout, sectionOrder: [String] = []) {
+    let sorted = layout.sortByDueDate ? reminders.sortedByDueDate() : reminders
+    self.reminders = sectionOrder.isEmpty ? sorted : sorted.grouped(bySectionOrder: sectionOrder)
     self.heading = heading
     self.layout = layout
   }

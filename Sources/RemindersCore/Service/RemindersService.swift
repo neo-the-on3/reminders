@@ -76,8 +76,11 @@ public struct RemindersService: Sendable {
       reminders = layout.tagging(reminders).filter { layout.sectionID(of: $0) == wanted.id }
       return ReminderListing(reminders, heading: "\(list.title) › \(wanted.displayName)", layout: .list)
     }
-    if let layout = try? await sectionLayout(of: list) { reminders = layout.tagging(reminders) }
-    return ReminderListing(reminders, heading: list.title, layout: .list)
+    guard let layout = try? await sectionLayout(of: list) else {
+      return ReminderListing(reminders, heading: list.title, layout: .list)
+    }
+    return ReminderListing(
+      layout.tagging(reminders), heading: list.title, layout: .list, sectionOrder: layout.sections.map(\.displayName))
   }
 
   /// `reminders today`: incomplete reminders due today.

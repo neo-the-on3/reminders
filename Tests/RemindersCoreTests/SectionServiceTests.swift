@@ -63,6 +63,37 @@ struct SectionReadingTests {
     }
     await #expect(throws: RemindersError.notImplemented("Sections")) { try await service.sections(ofList: "Groceries") }
   }
+  @Test("list groups reminders in section order, whatever order the store returns them in")
+  func sectionOrder() async throws {
+    // As captured on a Mac: EventKit returned Gamma's reminder first, then Beta's, then Alpha's, then the ungrouped.
+    let list = ReminderList(id: "LIST-PORT", title: "Port")
+    let sectionIDs = (0..<3).map { "00000000-0000-4000-8000-00000000000\($0)" }
+    let sections = zip(["Alpha", "Beta", "Gamma"], sectionIDs).enumerated().map { order, pair in
+      Section(id: pair.1, displayName: pair.0, listName: list.title, sortOrder: order)
+    }
+    let reminderIDs = (1...5).map { "00000000-0000-4000-9000-00000000000\($0)" }
+    let memberships = zip(reminderIDs.prefix(4), [0, 0, 1, 2]).map { reminder, section in
+      #"{"memberID":"\#(reminder)","groupID":"\#(sectionIDs[section])","modifiedOn":782900000}"#
+    }
+    let data = #"{"minimumSupportedVersion":20230430,"memberships":["# + memberships.joined(separator: ",") + "]}"
+    let reminders = [4, 3, 1, 2, 5].map { number in
+      Reminder(id: reminderIDs[number - 1], title: "Port test \(number)", listID: list.id, listName: list.title)
+    }
+    let store = InMemoryReminderStore(lists: [list], reminders: reminders, now: { referenceInstant })
+    let sectionStore = InMemorySectionStore(
+      sections: [list.id: sections], memberships: [list.id: StoredMemberships(data: data)])
+    let service = RemindersService(store: store, sections: sectionStore, clock: utcClock)
+
+    let listing = try await service.contents(ofList: "Port")
+    #expect(listing.reminders.map(\.title) == (1...5).map { "Port test \($0)" })
+    #expect(listing.reminders.map(\.section) == ["Alpha", "Alpha", "Beta", "Gamma", nil])
+
+    let (console, output, _) = makeConsole()
+    console.show(listing)
+    let groups = ["Alpha", "Beta", "Gamma", "Others"]
+    let headings = output.text.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
+    #expect(headings.filter(groups.contains) == groups)
+  }
 }
 
 @Suite("Sections: membership edits")

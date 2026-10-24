@@ -10,9 +10,10 @@ extension RemindersService {
   /// `reminders sections <list>`: the list's sections, with how many incomplete reminders each holds.
   public func sections(ofList name: String) async throws(RemindersError) -> SectionListing {
     let list = try await lists().resolve(name)
-    let layout = try await sectionLayout(of: list)
+    let reminders = try await store.reminders(inLists: [list.id], .incomplete)
+    let layout = try await sectionLayout(of: list, for: reminders)
     var counts = Dictionary(layout.sections.map { ($0.displayName, 0) }, uniquingKeysWith: { first, _ in first })
-    for reminder in try await store.reminders(inLists: [list.id], .incomplete) {
+    for reminder in reminders {
       guard let sectionID = layout.sectionID(of: reminder),
         let section = layout.sections.first(where: { $0.id == sectionID })
       else { continue }
@@ -55,7 +56,7 @@ extension RemindersService {
   {
     let (list, reminder) = try await find(reference)
     let section = try await sectionStore.sections(in: list).resolve(name)
-    let current = try? await sectionLayout(of: list).sectionID(of: reminder)
+    let current = try? await sectionLayout(of: list, for: [reminder]).sectionID(of: reminder)
     let moved = current != section.id
     if moved { try await sectionStore.assign(reminderID: Self.memberID(reminder.id), to: section, in: list) }
     return Confirmation(
@@ -66,10 +67,13 @@ extension RemindersService {
 
   // MARK: Membership data
 
-  /// The list's sections and which reminder is in which.
-  func sectionLayout(of list: ReminderList) async throws(RemindersError) -> SectionLayout {
+  /// The list's sections and which of `reminders` is in which.
+  func sectionLayout(of list: ReminderList, for reminders: [Reminder]) async throws(RemindersError) -> SectionLayout {
     let sections = try await sectionStore.sections(in: list)
-    let memberships = try SectionMemberships(storedData: try await sectionStore.memberships(of: list).data)
+    // A list without sections has no memberships worth asking about.
+    guard !sections.isEmpty else { return SectionLayout(sections: [], memberships: SectionMemberships(entries: [])) }
+    let stored = try await sectionStore.memberships(of: list, reminderIDs: reminders.map { Self.memberID($0.id) })
+    let memberships = try SectionMemberships(storedData: stored.data)
     return SectionLayout(sections: sections, memberships: memberships)
   }
 

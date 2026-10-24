@@ -42,7 +42,8 @@ public actor InMemorySectionStore: SectionStore {
     sectionsByList[list.id] = existing.filter { $0.id != section.id }
   }
 
-  public func memberships(of list: ReminderList) -> StoredMemberships {
+  /// The list's membership data as given (or as rewritten by assignments), whichever reminders are asked about.
+  public func memberships(of list: ReminderList, reminderIDs: [String] = []) -> StoredMemberships {
     membershipsByList[list.id] ?? StoredMemberships()
   }
 

@@ -14,7 +14,7 @@ public struct RemindersMCPServer: Sendable {
     fuzzy matched. Errors come back as {"error": {"code", "message", "suggestion"}}; PERMISSION_DENIED means macOS \
     hasn't given Reminders access to this server (or to the app that started it); show the user the error's \
     suggestion, which names what to allow and says how. Sections can be listed, filtered by, created and deleted, \
-    and reminders moved into them (listing needs Full Disk Access).
+    and reminders moved into them.
     """
 
   /// A configured server, not yet started.

@@ -62,8 +62,8 @@ public struct RemindersService: Sendable {
   /// `reminders list <name>`: the list's incomplete reminders, then (optionally) its completed ones, each tagged
   /// with its section. With `section`, only the reminders in that section.
   ///
-  /// Sections need the section store (on a Mac, Full Disk Access). Without it the list is shown without them,
-  /// unless `section` asks for one.
+  /// Sections come from the section store (on a Mac, ReminderKit). When it can't answer, the list is shown without
+  /// them, unless `section` asks for one.
   public func contents(ofList name: String, section: String? = nil, includeCompleted: Bool = false)
     async throws(RemindersError) -> ReminderListing
   {
@@ -71,12 +71,12 @@ public struct RemindersService: Sendable {
     var reminders = try await store.reminders(inLists: [list.id], .incomplete)
     if includeCompleted { reminders += try await store.reminders(inLists: [list.id], .completed) }
     if let section {
-      let layout = try await sectionLayout(of: list)
+      let layout = try await sectionLayout(of: list, for: reminders)
       let wanted = try layout.sections.resolve(section)
       reminders = layout.tagging(reminders).filter { layout.sectionID(of: $0) == wanted.id }
       return ReminderListing(reminders, heading: "\(list.title) › \(wanted.displayName)", layout: .list)
     }
-    guard let layout = try? await sectionLayout(of: list) else {
+    guard let layout = try? await sectionLayout(of: list, for: reminders) else {
       return ReminderListing(reminders, heading: list.title, layout: .list)
     }
     return ReminderListing(

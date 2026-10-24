@@ -1,9 +1,7 @@
 // Section data as Reminders stores it on a list.
 //
-// SYNTHETIC: these values follow the documented formats of ZMEMBERSHIPSOFREMINDERSINSECTIONSASDATA and
-// ZRESOLUTIONTOKENMAP_V3_JSONDATA, and were not captured from a real database. Once
-// `scripts/capture-section-fixtures.sh` has been run on a Mac, replace them with its output (it reads a copy of the
-// database and never writes to it) and drop this marker.
+// SYNTHETIC: these values follow the documented formats of Reminders' membership data
+// (MembershipsOfRemindersInSectionsAsData) and resolution token map.
 
 import Foundation
 

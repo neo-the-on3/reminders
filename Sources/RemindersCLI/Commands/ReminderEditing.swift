@@ -23,9 +23,8 @@ struct Add: ConsoleCommand {
   @Option(help: "Recurrence: \"daily\", \"weekly\", \"every 2 weeks\", \"every 3 months\"") var `repeat`: String?
 
   func run(in context: CommandContext) async throws {
-    if section != nil { throw RemindersError.notImplemented("Adding to a section (--section)") }
     let request = NewReminderRequest(
-      list: list, title: title, due: due, priority: priority, notes: notes, repeatRule: `repeat`)
+      list: list, title: title, due: due, priority: priority, notes: notes, repeatRule: `repeat`, section: section)
     context.console.show(try await context.service.add(request))
   }
 }

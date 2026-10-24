@@ -198,6 +198,18 @@ extension [Reminder] {
     }.map(\.element)
   }
 
+  /// In the position each has in `identifiers` (matched in any case), when given; reminders it doesn't name
+  /// follow in their current order.
+  func ordered(by identifiers: [String]?) -> [Reminder] {
+    guard let identifiers else { return self }
+    let positions = Dictionary(
+      identifiers.enumerated().map { ($0.element.uppercased(), $0.offset) }, uniquingKeysWith: { first, _ in first })
+    func rank(_ entry: (offset: Int, element: Reminder)) -> (Int, Int) {
+      (positions[entry.element.id.uppercased()] ?? positions.count + entry.offset, entry.offset)
+    }
+    return enumerated().sorted { rank($0) < rank($1) }.map(\.element)
+  }
+
   /// Grouped by section in `order`, keeping each group's order: sections not in `order` next, then reminders in
   /// no section.
   func grouped(bySectionOrder order: [String]) -> [Reminder] {

@@ -372,7 +372,9 @@ tool. Intentional differences:
   headings and `overdue` agree. The original also counted reminders due today in `lists`, and completed reminders
   in headings.
 - **Order.** Every reminder listing is sorted by due date (earliest first, undated last), in text and `--json`
-  alike; the original's JSON kept Reminders' own order.
+  alike; the original's JSON kept Reminders' own order. The exception is `list` on a list sorted manually in
+  Reminders: it keeps the arranged order (from ReminderKit's `reminderIDsOrdering`) within each section, which the
+  original never read.
 - **MCP results** are the CLI's `--json` data, wrapped in an object where it is a list (`{"lists": …}`,
   `{"reminders": …}`), because MCP structured content must be an object. Confirmations are the CLI's messages,
   such as `Completed "Buy milk" in "Groceries"`. Failures are `isError` results carrying the error code rather

@@ -64,23 +64,31 @@ public struct RemindersService: Sendable {
   ///
   /// Sections come from the section store (on a Mac, ReminderKit). When it can't answer, the list is shown without
   /// them, unless `section` asks for one.
+  ///
+  /// A list sorted manually in Reminders keeps that order (within each section); otherwise reminders are sorted by
+  /// due date.
   public func contents(ofList name: String, section: String? = nil, includeCompleted: Bool = false)
     async throws(RemindersError) -> ReminderListing
   {
     let list = try await lists().resolve(name)
-    var reminders = try await store.reminders(inLists: [list.id], .incomplete)
-    if includeCompleted { reminders += try await store.reminders(inLists: [list.id], .completed) }
+    let manualOrder = await sectionStore.manualReminderOrder(of: list)
+    var reminders = try await store.reminders(inLists: [list.id], .incomplete).ordered(by: manualOrder)
+    if includeCompleted {
+      reminders += try await store.reminders(inLists: [list.id], .completed).ordered(by: manualOrder)
+    }
+    let order =
+      manualOrder == nil ? ReminderLayout.list : ReminderLayout(.list, sortByDueDate: false, groupBySection: true)
     if let section {
       let layout = try await sectionLayout(of: list, for: reminders)
       let wanted = try layout.sections.resolve(section)
       reminders = layout.tagging(reminders).filter { layout.sectionID(of: $0) == wanted.id }
-      return ReminderListing(reminders, heading: "\(list.title) › \(wanted.displayName)", layout: .list)
+      return ReminderListing(reminders, heading: "\(list.title) › \(wanted.displayName)", layout: order)
     }
     guard let layout = try? await sectionLayout(of: list, for: reminders) else {
-      return ReminderListing(reminders, heading: list.title, layout: .list)
+      return ReminderListing(reminders, heading: list.title, layout: order)
     }
     return ReminderListing(
-      layout.tagging(reminders), heading: list.title, layout: .list, sectionOrder: layout.sections.map(\.displayName))
+      layout.tagging(reminders), heading: list.title, layout: order, sectionOrder: layout.sections.map(\.displayName))
   }
 
   /// `reminders today`: incomplete reminders due today.

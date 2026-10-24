@@ -9,12 +9,20 @@ public protocol SectionStore: Sendable {
   func createSection(named name: String, in list: ReminderList) async throws(RemindersError) -> Section
   func deleteSection(_ section: Section, in list: ReminderList) async throws(RemindersError)
 
+  /// The order the user arranged the list's reminders in, as reminder identifiers, when the list is sorted
+  /// manually; nil when it isn't, or the order can't be read. Never fails: it only arranges what's shown.
+  func manualReminderOrder(of list: ReminderList) async -> [String]?
+
   /// Which section each of `reminderIDs` (upper-case dashed UUIDs) is in, in Reminders' membership format.
   /// Reminders in no section may be left out.
   func memberships(of list: ReminderList, reminderIDs: [String]) async throws(RemindersError) -> StoredMemberships
   /// Puts a reminder in one of the list's sections, taking it out of any other.
   /// - Parameter reminderID: The reminder's identifier as an upper-case dashed UUID.
   func assign(reminderID: String, to section: Section, in list: ReminderList) async throws(RemindersError)
+}
+
+extension SectionStore {
+  public func manualReminderOrder(of list: ReminderList) async -> [String]? { nil }
 }
 
 /// Section memberships in Reminders' own format: the JSON it keeps on a list and syncs through iCloud

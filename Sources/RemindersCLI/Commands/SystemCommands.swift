@@ -16,11 +16,15 @@ struct Demo: ConsoleCommand {
 struct Authorize: ConsoleCommand {
   static let configuration = CommandConfiguration(abstract: "Request Reminders access permission")
   @OptionGroup var globals: GlobalOptions
+  @Flag(
+    name: .customLong(String(PermissionGuidance.forMCPOption.dropFirst(2))),
+    help: "Also open System Settings to turn on this tool's own entry, for MCP clients such as Claude Desktop")
+  var forMCPServer = false
 
   /// Exits 1 unless the process ends up with full Reminders access.
   func run(in context: CommandContext) async throws {
     let diagnostics = Diagnostics(service: context.service, system: context.system)
-    let report = await diagnostics.authorize(narratingTo: context.console)
+    let report = await diagnostics.authorize(narratingTo: context.console, forMCPServer: forMCPServer)
     let failure = diagnostics.failure(of: report)
     context.console.show(report, failure: failure)
     if failure != nil { throw ExitCode.failure }

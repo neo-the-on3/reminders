@@ -86,8 +86,17 @@ that declares no Reminders usage description can't be asked, so `reminders` (whi
 of it.
 
 macOS only asks once. After access is denied, restricted or set to write-only, re-running `authorize` shows no
-prompt: enable the app (or `reminders`) under System Settings › Privacy & Security › Reminders (choose Full
-Access), then restart that app, or just run `reminders` again. `doctor`, `authorize` and every `PERMISSION_DENIED` error say which of these states applies.
+prompt; it opens System Settings › Privacy & Security › Reminders instead and says which entry to turn on (choose
+Full Access), then restart that app, or just run `reminders` again. `doctor`, `authorize` and every
+`PERMISSION_DENIED` error say which of these states applies.
+
+Under an MCP client the error leads with a command to run, since a model relaying it repeats a command where it
+would paraphrase prose. Under Claude Desktop, which leaves the server its own `"reminders"` entry, that's
+`reminders authorize --for-mcp` in Terminal: it handles Terminal's own access as usual, then opens the Reminders
+page to turn on `"reminders"`. Under Cursor, which holds access for its servers, it's `reminders authorize` in a
+terminal inside Cursor. Either way the error ends with quitting and reopening the client (the app that started the
+server): macOS reads the permission when a process starts, so the change takes effect once the client starts the
+server again.
 
 macOS only prompts a command-line tool that carries a usage description, so the linker embeds
 [`Support/Info.plist`](Support/Info.plist) (bundle identifier `io.github.neo-the-on3.reminders` and

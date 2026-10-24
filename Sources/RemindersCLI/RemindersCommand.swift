@@ -29,7 +29,7 @@ struct RemindersCommand: AsyncParsableCommand {
     if arguments.contains("--mcp") {
       do {
         // Errors name what macOS attributes Reminders access to (the client app, or this tool when the client
-        // disclaims it, as Claude Desktop does) and the client to restart.
+        // disclaims it, as Claude does) and the client to restart.
         let server = RemindersMCPServer(service: RemindersPlatform.makeService(asMCPServer: true))
         try await server.run(on: StdioTransport())
       } catch {

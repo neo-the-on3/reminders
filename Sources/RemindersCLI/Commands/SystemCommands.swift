@@ -18,7 +18,7 @@ struct Authorize: ConsoleCommand {
   @OptionGroup var globals: GlobalOptions
   @Flag(
     name: .customLong(String(PermissionGuidance.forMCPOption.dropFirst(2))),
-    help: "Also open System Settings to turn on this tool's own entry, for MCP clients such as Claude Desktop")
+    help: "Also open System Settings to turn on this tool's own entry, for MCP clients such as Claude")
   var forMCPServer = false
 
   /// Exits 1 unless the process ends up with full Reminders access.

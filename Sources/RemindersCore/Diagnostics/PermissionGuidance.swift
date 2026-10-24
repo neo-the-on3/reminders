@@ -56,7 +56,7 @@ public struct PermissionGuidance: Hashable, Sendable {
   private var mcpCommand: String {
     holderIsThisTool
       ? "Run `\(ProductInfo.name) authorize \(Self.forMCPOption)` in Terminal"
-      : "Run `\(ProductInfo.name) authorize` in a terminal inside \(holder)"
+      : "Run `\(ProductInfo.name) authorize` in \(holder)'s built-in terminal"
   }
 
   /// Where the entry is switched on, after ``mcpCommand``.

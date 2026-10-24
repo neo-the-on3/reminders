@@ -39,9 +39,9 @@ private struct Machine {
   var calls: [[String]] { runner.calls.withLock { $0 } }
 }
 
-@Suite("MCP setup: Claude Desktop and Cursor")
+@Suite("MCP setup: Claude and Cursor")
 struct MCPSetupFileClientTests {
-  @Test("Claude Desktop: created, then unchanged, then removed, with backups of each change")
+  @Test("Claude: created, then unchanged, then removed, with backups of each change")
   func claudeDesktop() throws {
     let machine = try Machine()
     let path = MCPSetup.claudeDesktopConfig(home: machine.home.path)
@@ -49,11 +49,11 @@ struct MCPSetupFileClientTests {
     let added = try machine.setup.configure(.claudeDesktop, at: path, SetupOptions())
     #expect(added.outcome == .added)
     #expect(added.backupPath == nil)
-    #expect(added.nextSteps.first?.contains("Quit Claude Desktop") == true)
+    #expect(added.nextSteps.first?.contains("Quit Claude completely") == true)
     #expect(
       added.note?.contains("prompt and the System Settings › Privacy & Security › Reminders entry name `reminders`")
         == true)
-    #expect(added.note?.contains("restart Claude Desktop") == true)
+    #expect(added.note?.contains("restart Claude") == true)
     let written = try #require(try ConfigFile.read(path))
     #expect(written.contains(#""command": "\#(binary)""#))
     #expect(!written.contains("\"type\""))
@@ -314,7 +314,9 @@ struct MCPSetupMessageTests {
     #expect(MCPClient.claudeCode.permissionNote.contains("the app Claude Code runs in"))
     for client in [MCPClient.claudeDesktop, .cursor, .claudeCode] {
       let others = [MCPClient.claudeDesktop, .cursor].filter { $0 != client }.map(\.displayName)
-      #expect(others.allSatisfy { !client.permissionNote.contains($0) })
+      // "Claude" is also the start of "Claude Code", which isn't another client's name here.
+      let note = client.permissionNote.replacing(MCPClient.claudeCode.displayName, with: "")
+      #expect(others.allSatisfy { !note.contains($0) })
     }
   }
 }

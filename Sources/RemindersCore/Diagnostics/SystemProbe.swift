@@ -10,7 +10,7 @@ public protocol SystemProbe: Sendable {
   /// The app macOS attributes this process's permissions to; nil when no app launched it.
   var hostApplication: HostApplication? { get }
   /// The app that started this process (the app enclosing its parent), such as the MCP client that launched
-  /// `reminders --mcp`; nil when no app did. It may differ from ``hostApplication``: Claude Desktop starts its
+  /// `reminders --mcp`; nil when no app did. It may differ from ``hostApplication``: Claude starts its
   /// servers but leaves them responsible for their own permissions.
   var launchingApplication: HostApplication? { get }
   /// Opens a System Settings pane; false when that failed.

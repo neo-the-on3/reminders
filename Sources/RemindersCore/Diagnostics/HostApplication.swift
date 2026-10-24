@@ -1,6 +1,6 @@
 /// What macOS attributes this process's privacy permissions (Reminders access) to: its responsible
 /// process. That's usually the app that launched it, such as Terminal, iTerm or Cursor. An app that disclaims
-/// responsibility for what it starts, as Claude Desktop does for MCP servers, leaves this tool holding the
+/// responsibility for what it starts, as Claude does for MCP servers, leaves this tool holding the
 /// permissions itself, and macOS asks about `reminders` by name.
 public struct HostApplication: Hashable, Sendable, Codable {
   /// Display name, such as "Terminal", or "reminders" for this tool.

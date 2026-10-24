@@ -19,7 +19,7 @@ public enum SetupOutcome: String, Sendable, Encodable {
 
 /// A client's JSON configuration with its `mcpServers` table, edited without disturbing anything else.
 ///
-/// Claude Desktop (`claude_desktop_config.json`), Cursor (`mcp.json`) and Claude Code's files keep MCP servers by
+/// Claude (`claude_desktop_config.json`), Cursor (`mcp.json`) and Claude Code's files keep MCP servers by
 /// name under a top-level `mcpServers` object. An edit is spliced into the original text: only the `reminders`
 /// entry and the separator before it change, so other servers, other keys, their order and spacing, one-line
 /// layouts and the final newline stay byte for byte as they were, and removing an entry that was added gives the

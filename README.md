@@ -4,14 +4,14 @@ A fast, native command-line tool for Apple Reminders, with section support and i
 no Node.js or helper processes, with `--json` output for scripts and an MCP server mode (`reminders --mcp`) for AI
 assistants.
 
-> **Status: lists and reminders work; sections can be read, created and deleted.** `lists`, `list`, `today`, `overdue`, `upcoming`,
+> **Status: lists and reminders work; sections can be read, created, deleted and filled.** `lists`, `list`, `today`, `overdue`, `upcoming`,
 > `search`, `add`, `complete`, `update`, `delete`, `create-list`, `delete-list`, `authorize` and `doctor` work
 > against Apple Reminders through EventKit, from the command line and as MCP tools; `setup-claude`,
 > `setup-claude-code` and `setup-cursor` register the MCP server with those clients. `sections` and
-> `list --section` read sections from the Reminders database (they need Full Disk Access); `create-section` and
-> `delete-section` change them through ReminderKit, Reminders' private framework, and are not yet verified
-> against iCloud sync. Moving reminders between sections (`move`, `add --section`) and `demo` arrive in follow-up
-> PRs; until then they fail with a structured `NOT_IMPLEMENTED` error.
+> `list --section` read sections from the Reminders database (they need Full Disk Access); `create-section`,
+> `delete-section`, `move` and `add --section` change them only through ReminderKit, Reminders' private framework
+> (this tool never writes the Reminders database), and are not yet verified against iCloud sync. `demo` arrives in
+> a follow-up PR; until then it fails with a structured `NOT_IMPLEMENTED` error.
 
 ## Requirements
 
@@ -233,15 +233,15 @@ Each tool runs the same operation as the CLI command, with the same name matchin
 | `reminders_sections` | `list` | `{"sections": [section]}` |
 | `reminders_create_section` | `list`, `name` (reused if a section has exactly that name) | `{"message", "id"}` |
 | `reminders_delete_section` | `list`, `name` | `{"message"}` |
-| `reminders_move` | see schema | not implemented yet* |
+| `reminders_move` | `list`, `title` or `id`, `toSection` | `{"message"}` |
 
-\* `reminders_move`, and `section` on `reminders_add`, report `NOT_IMPLEMENTED` for now. Sections need Full Disk
+\* With `section`, the reminder is added and then moved into the section; if that second step fails, the error
+says the reminder was added. Reading sections needs Full Disk
 Access for the app running the server; without it, the section tools and a `section` filter fail with
-`PERMISSION_DENIED`, and `reminders_list` still works, without section names. Creating and deleting sections
-also needs ReminderKit; where it's missing or changed they fail with `REMINDERKIT_UNAVAILABLE`.
+`PERMISSION_DENIED`, and `reminders_list` still works, without section names. Creating and deleting sections and
+moving reminders into them also need ReminderKit; where it's missing or changed they fail with `REMINDERKIT_UNAVAILABLE`.
 
-Every tool publishes a JSON Schema for its input (unknown arguments are rejected) and, except `reminders_move`,
-for its output, and carries annotations (`readOnlyHint` on queries, `destructiveHint` on deletions).
+Every tool publishes a JSON Schema for its input (unknown arguments are rejected) and for its output, and carries annotations (`readOnlyHint` on queries, `destructiveHint` on deletions).
 Results come back both as `structuredContent` and as the same JSON in a text block. Failures are tool errors
 (`isError: true`) whose text is `{"error": {"code", "message", "suggestion"}}` with the CLI's error codes; an
 unknown tool name is a JSON-RPC `-32602` error.
@@ -260,13 +260,13 @@ Five targets with one-way dependencies (`RemindersCLI` → `RemindersMCP`, `Remi
   - `Presentation/`: `Console` sends any `ConsoleRepresentable` result (`ListOverview`, `ReminderListing`,
     `Confirmation`, …) either to `TextRenderer` or, with `--json`, through `JSONEncoder` into a
     `{"success": true, "data": …}` envelope; failures become `{"success": false, "error": …}`.
-  - `SectionSync/`: what Reminders stores for sections: `SectionMemberships` (with its SHA-512 checksum) and
-    `ResolutionTokenMap` (the vector clocks that make iCloud push a change). They edit stored JSON in place, keeping
-    unknown fields, key order and number formatting, because Reminders checksums the exact bytes.
+  - `SectionSync/`: reading what Reminders stores for sections: `SectionMemberships` decodes a list's
+    memberships (the newest entry for a reminder wins). Nothing here writes them; changes go through ReminderKit,
+    which also keeps Reminders' checksum and sync metadata up to date.
   - `Store/`: the `ReminderStore` protocol (`Sendable`, async, typed throws), which is everything the commands
     need from a reminders database, plus `InMemoryReminderStore`, an actor used by the tests. Sections have their
-    own `SectionStore`, because EventKit has none: it reads and writes a list's sections and its raw stored
-    memberships, and replaces them only if they haven't changed since they were read (`STORE_CONFLICT` otherwise).
+    own `SectionStore`, because EventKit has none: it reads a list's sections and its raw stored memberships,
+    creates and deletes sections, and assigns a reminder to a section.
   - `Service/`: `RemindersService`, the commands as operations on any store: access checks, list resolution,
     counts, the today/overdue/upcoming/search filters and the changes. It returns `ConsoleRepresentable` values.
   - `Diagnostics/`: `doctor`'s checks and `authorize`'s steps, against a `SystemProbe` (macOS version, embedded
@@ -281,7 +281,8 @@ Five targets with one-way dependencies (`RemindersCLI` → `RemindersMCP`, `Remi
   EventKit objects never leave it (fetches convert to `Reminder` values, changes look items up by identifier).
   `DatabaseSectionStore` reads sections from Reminders' SQLite databases (one per account) through a
   `SQLiteDatabase` connection that is opened read-only, via the `CSQLite` system library (`libsqlite3-dev` on
-  Linux). `AppleSectionStore` adds creating and deleting sections through a `ReminderKitBridge`, implemented
+  Linux). `AppleSectionStore` adds creating and deleting sections, and moving reminders into them, through a
+  `ReminderKitBridge`, implemented
   by `RuntimeReminderKit`, which loads the private ReminderKit framework at run time (nothing links against it)
   and checks each class and method before calling it. `MacSystemProbe` provides the machine facts. It compiles everywhere: off macOS,
   `UnsupportedPlatformStore` answers every call with `UNSUPPORTED_PLATFORM`.
@@ -306,7 +307,7 @@ Five targets with one-way dependencies (`RemindersCLI` → `RemindersMCP`, `Remi
   [`scripts/date-reference-cases.mjs`](scripts/date-reference-cases.mjs) (instructions inside).
 - **Text output**: the human-readable output for a fixed sample, with colour off and on and verbose or not, must
   match [`RenderingFixtures.swift`](Tests/RemindersCoreTests/RenderingFixtures.swift) byte for byte.
-- **Sections**: membership edits must produce the exact bytes, checksum and token-map counters in
+- **Sections**: memberships are read from the stored data in
   [`SectionFixtures.swift`](Tests/RemindersCoreTests/Fixtures/SectionFixtures.swift). Those fixtures follow the
   documented formats until they're replaced by real data: on a Mac, run
   [`scripts/capture-section-fixtures.sh`](scripts/capture-section-fixtures.sh) `"<throwaway list>"`, which copies
@@ -388,7 +389,7 @@ tool. Intentional differences:
   different reminder that shares an identifier prefix.
 - **Text matching** follows Swift string semantics: canonically equivalent names match (`é` typed either way),
   and table columns are measured in terminal cells, so wide characters line up.
-- **Corrupt section data** is reported as an error and never overwritten.
+- **Corrupt section data** is reported as an error. This tool never writes section data itself.
 - **`demo`** is hidden from help and completions until it is implemented.
 
 ## Attribution

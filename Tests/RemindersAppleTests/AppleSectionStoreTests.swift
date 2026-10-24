@@ -72,11 +72,13 @@ private final class FakeReminderKit: ReminderKitBridge {
     }
   }
 
-  func deleteSection(id: String, in list: ReminderList) throws(RemindersError) {
+  func deleteSection(id: String, in list: ReminderList, clearing members: [String]) throws(RemindersError) {
     try state.withLock { state throws(RemindersError) in
       if let failure = state.failure { throw failure }
-      state.calls.append("delete \(id) in \(list.title)")
-      if !state.dropsWrites { state.sections.removeAll { $0.id == id } }
+      state.calls.append("delete \(id) in \(list.title), clearing \(members)")
+      guard !state.dropsWrites else { return }
+      state.sections.removeAll { $0.id == id }
+      state.memberships.removeAll { members.contains($0.reminderID) }
     }
   }
 
@@ -308,12 +310,34 @@ struct AppleSectionStoreTests {
     #expect(setup.reminderKit.state.withLock(\.calls) == ["create Frozen in Groceries"])
   }
 
-  @Test("delete-section asks ReminderKit")
+  @Test("delete-section takes every reminder in the section out of it, completed ones too, in the same save")
   func delete() async throws {
     let setup = Setup()
+    let produceID = UUID().uuidString
+    setup.reminderKit.state.withLock {
+      $0.sections.append(ReminderKitSection(id: produceID, displayName: "Produce"))
+      // Butter is completed: not one of the reminders the service lists, but still a member.
+      $0.memberships = [
+        .init(reminderID: milkID, sectionID: dairyID), .init(reminderID: butterID, sectionID: dairyID.lowercased()),
+        .init(reminderID: applesID, sectionID: produceID),
+      ]
+    }
     let result = try await setup.service.deleteSection(named: "dai", inList: "Groceries")
     #expect(result.message == "Deleted section \"Dairy\" from \"Groceries\"")
-    #expect(setup.reminderKit.state.withLock(\.calls) == ["delete \(dairyID) in Groceries"])
+    #expect(
+      setup.reminderKit.state.withLock(\.calls) == ["delete \(dairyID) in Groceries, clearing \([milkID, butterID])"])
+    // Every reminder in the list was asked about, not just the incomplete ones.
+    #expect(setup.reminderKit.state.withLock(\.membershipQueries) == [nil])
+    // Apples, in another section, is untouched.
+    #expect(setup.reminderKit.state.withLock(\.memberships) == [.init(reminderID: applesID, sectionID: produceID)])
+  }
+
+  @Test("deleting an empty section clears nothing")
+  func deleteEmpty() async throws {
+    let setup = Setup()
+    setup.reminderKit.state.withLock { $0.memberships = [] }
+    _ = try await setup.service.deleteSection(named: "Dairy", inList: "Groceries")
+    #expect(setup.reminderKit.state.withLock(\.calls) == ["delete \(dairyID) in Groceries, clearing []"])
   }
 
   @Test("ReminderKit's errors reach the caller unchanged")

@@ -38,9 +38,8 @@ extension RemindersService {
 
   /// `reminders delete-section`. Its reminders stay in the list, outside any section.
   ///
-  /// The list and section are resolved first, so a bad name deletes nothing; the deletion itself is one save.
-  /// Membership data isn't edited here: Reminders treats members of a deleted section as being in no section, and
-  /// reading ignores memberships of sections that no longer exist.
+  /// The list and section are resolved first, so a bad name deletes nothing. The section store takes the section's
+  /// reminders out of it in the same save as the deletion.
   public func deleteSection(named name: String, inList listName: String) async throws(RemindersError)
     -> Confirmation
   {

@@ -102,8 +102,12 @@ public struct AppleSectionStore: SectionStore {
       ?? Section(id: created.id, displayName: created.displayName, listName: list.title, sortOrder: saved.count)
   }
 
+  /// Deletes the section, taking every reminder in it (completed ones too) out of it in the same save.
   public func deleteSection(_ section: Section, in list: ReminderList) async throws(RemindersError) {
-    try reminderKit.deleteSection(id: section.id, in: list)
+    let members = try reminderKit.memberships(in: list, reminderIDs: nil).value
+      .filter { $0.sectionID.caseInsensitiveCompare(section.id) == .orderedSame }.map(\.reminderID)
+    diagnostics?("delete section: clearing \(members.count) membership(s)")
+    try reminderKit.deleteSection(id: section.id, in: list, clearing: members)
     _ = try await confirm("section \"\(section.displayName)\" is still in \"\(list.title)\" after saving") {
       () async throws(RemindersError) in
       try await sections(in: list).contains { $0.id.caseInsensitiveCompare(section.id) == .orderedSame } ? nil : true

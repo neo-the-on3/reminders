@@ -45,10 +45,6 @@ public struct RemindersError: Error, Hashable, Sendable, Codable, CustomStringCo
 }
 
 extension RemindersError {
-  /// Section memberships changed between reading and writing them.
-  public static let membershipConflict = RemindersError(
-    .storeConflict, "Reminders changed this list's sections while they were being edited", suggestion: "Try again")
-
   /// A command or option that exists in the CLI but isn't implemented yet.
   public static func notImplemented(_ feature: String) -> RemindersError {
     RemindersError(

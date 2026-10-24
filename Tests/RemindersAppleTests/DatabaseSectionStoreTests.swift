@@ -14,7 +14,6 @@ private let breadID = "6B1C2D3E-4F5A-4B6C-9D7E-8F9A0B1C2D3E"
 private let storedData =
   #"{"minimumSupportedVersion":20230430,"memberships":[{"memberID":"\#(milkID)","groupID":"\#(dairyID)","modifiedOn":782900000.123456}]}"#
 private let storedTokenMap = #"{"map":{"membershipsOfRemindersInSectionsChecksum":{"counter":3}}}"#
-private let storedChecksum = SectionMemberships.checksum(of: storedData)
 
 private let groceries = ReminderList(id: listID, title: "Groceries")
 
@@ -22,7 +21,7 @@ private let groceries = ReminderList(id: listID, title: "Groceries")
 private func groceriesSQL() -> String {
   """
   INSERT INTO ZREMCDBASELIST VALUES (7, 2, 0, \(Builder.blob(listID)), 'Groceries', \
-  \(Builder.blob(utf8: storedData)), \(Builder.text(storedChecksum)), \(Builder.blob(utf8: storedTokenMap)));
+  \(Builder.blob(utf8: storedData)), NULL, \(Builder.blob(utf8: storedTokenMap)));
   INSERT INTO ZREMCDBASELIST VALUES (8, 2, 1, \(Builder.blob(UUID().uuidString)), 'Groceries', NULL, NULL, NULL);
   INSERT INTO ZREMCDBASESECTION VALUES (12, 3, 0, 7, \(Builder.blob(produceID)), 'Produce', 783000000);
   INSERT INTO ZREMCDBASESECTION VALUES (11, 3, 0, 7, \(Builder.blob(dairyID)), 'Dairy', 782000000);
@@ -61,13 +60,12 @@ struct DatabaseSectionStoreTests {
     #expect(sections.allSatisfy { $0.listName == "Groceries" })
   }
 
-  @Test("membership data, checksum and token map come back exactly as stored")
+  @Test("membership data comes back exactly as stored")
   func memberships() async throws {
     let builder = try Builder()
     let path = try builder.database("local", groceriesSQL())
     let stored = try await store([path]).memberships(of: groceries)
-    #expect(stored == StoredMemberships(data: storedData, checksum: storedChecksum, tokenMap: storedTokenMap))
-    #expect(!SectionMemberships.isCorrupt(stored))
+    #expect(stored == StoredMemberships(data: storedData))
   }
 
   @Test("a list without section data has none")
@@ -118,7 +116,7 @@ struct DatabaseSectionStoreTests {
     #expect(await code { try await sections.deleteSection(dairy, in: groceries) } == .notImplemented)
     #expect(
       await code {
-        try await sections.replaceMemberships(of: groceries, with: StoredMemberships(), ifUnchangedFrom: .init())
+        try await sections.assign(reminderID: milkID, to: dairy, in: groceries)
       } == .notImplemented)
     #expect(try Data(contentsOf: URL(filePath: path)) == before)
     #expect(!FileManager.default.fileExists(atPath: path + "-journal"))

@@ -1,10 +1,10 @@
 import RemindersCore
 
-/// Sections on macOS: read from Reminders' database, created and deleted through ReminderKit.
+/// Sections on macOS: read from Reminders' database, changed through ReminderKit.
 ///
-/// Reads come from the database because it also holds the membership data, which ReminderKit doesn't expose;
-/// creating and deleting go through ReminderKit so iCloud syncs them. Both need the database's view of the list,
-/// so both need Full Disk Access.
+/// Reads come from the database because it also holds the membership data; creating, deleting and moving
+/// reminders between sections go through ReminderKit, so Reminders writes the data and its checksum and iCloud
+/// syncs them. Nothing here writes the database. Reading needs Full Disk Access.
 public struct AppleSectionStore: SectionStore {
   private let database: any SectionStore
   private let reminderKit: any ReminderKitBridge
@@ -34,9 +34,7 @@ public struct AppleSectionStore: SectionStore {
     try await database.memberships(of: list)
   }
 
-  public func replaceMemberships(
-    of list: ReminderList, with new: StoredMemberships, ifUnchangedFrom old: StoredMemberships
-  ) async throws(RemindersError) {
-    try await database.replaceMemberships(of: list, with: new, ifUnchangedFrom: old)
+  public func assign(reminderID: String, to section: Section, in list: ReminderList) throws(RemindersError) {
+    try reminderKit.assign(reminderID: reminderID, toSectionID: section.id, in: list)
   }
 }

@@ -9,8 +9,6 @@ public struct RemindersError: Error, Hashable, Sendable, Codable, CustomStringCo
     case sectionNotFound = "SECTION_NOT_FOUND"
     case ambiguousReminder = "AMBIGUOUS_REMINDER"
     case reminderKitUnavailable = "REMINDERKIT_UNAVAILABLE"
-    case databaseNotFound = "DB_NOT_FOUND"
-    case syncTriggerFailed = "SYNC_TRIGGER_FAILED"
     case invalidArgument = "INVALID_ARGUMENT"
     /// One or more `doctor` checks failed.
     case checksFailed = "CHECKS_FAILED"
@@ -18,8 +16,6 @@ public struct RemindersError: Error, Hashable, Sendable, Codable, CustomStringCo
     case storeFailure = "STORE_FAILURE"
     /// A change was saved without an error, but reading back shows it didn't take effect.
     case writeNotApplied = "WRITE_NOT_APPLIED"
-    /// Reminders changed the data while it was being edited, again after retrying.
-    case storeConflict = "STORE_CONFLICT"
     /// Apple Reminders isn't available on this platform (any OS other than macOS).
     case unsupportedPlatform = "UNSUPPORTED_PLATFORM"
     /// A client's configuration file can't be read as JSON, or isn't shaped as expected; it was left alone.

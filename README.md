@@ -380,6 +380,10 @@ tool. Intentional differences:
   `{"success": false, "data": ..., "error": ...}` when they fail: `CHECKS_FAILED` for `doctor`,
   `PERMISSION_DENIED` for `authorize`. `authorize --json` prints the outcome (`remindersAccess`, `host`) instead
   of nothing.
+- **`doctor` checks only what applies**: macOS version, the embedded Info.plist, what holds the permission,
+  ReminderKit and Reminders access. This tool never reads Reminders' database and Reminders syncs its own
+  changes, so there are no database, store or sync checks; the original's `--db` and `--sync` are accepted (and
+  hidden) so scripts keep working, and change nothing.
 - **Overdue** has one meaning everywhere: incomplete and due on a day before today. `lists` counts, listing
   headings and `overdue` agree. The original also counted reminders due today in `lists`, and completed reminders
   in headings.

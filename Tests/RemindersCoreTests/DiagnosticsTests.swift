@@ -97,14 +97,11 @@ struct DiagnosticsTests {
 
   @Test("old macOS fails; a missing Info.plist and ReminderKit warn")
   func problems() async {
-    let report = await diagnostics(system: FakeSystem(version: "15.4", plist: false, reminderKit: false)).checkHealth(
-      includeDatabaseStats: true, includeSync: true)
+    let report = await diagnostics(system: FakeSystem(version: "15.4", plist: false, reminderKit: false)).checkHealth()
     let statuses = Dictionary(uniqueKeysWithValues: report.checks.map { ($0.name, $0.status) })
     #expect(statuses["macOS version"] == .fail)
     #expect(statuses["Info.plist"] == .warn)
     #expect(statuses["Sections (ReminderKit)"] == .warn)
-    #expect(statuses["Database stats"] == .warn)
-    #expect(statuses["Sync"] == .warn)
     #expect(report.failureCount == 1)
   }
 

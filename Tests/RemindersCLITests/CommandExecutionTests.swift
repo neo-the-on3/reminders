@@ -169,6 +169,18 @@ struct CommandExecutionTests {
     #expect(denied.errors.text.isEmpty)
   }
 
+  @Test("doctor shows only checks that apply; the original's --db and --sync are accepted and add nothing")
+  func doctorChecks() async throws {
+    let plain = Harness()
+    #expect(try await plain.run(["doctor"], system: HealthySystem()) == 0)
+    let flagged = Harness()
+    #expect(try await flagged.run(["doctor", "--db", "--sync"], system: HealthySystem()) == 0)
+    #expect(flagged.output.text == plain.output.text)
+    for moot in ["Database", "database", "Sync", "Full Disk Access", "Data dir"] {
+      #expect(!plain.output.text.contains(moot))
+    }
+  }
+
   @Test("authorize exits 1 unless Reminders access ends up granted")
   func authorizeExitStatus() async throws {
     let undecided = Harness(store: InMemoryReminderStore(access: .notDetermined))

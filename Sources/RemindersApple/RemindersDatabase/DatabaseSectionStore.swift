@@ -24,7 +24,15 @@ public struct DatabaseSectionStore: SectionStore {
         key: columns[0].integer ?? 0, identifier: columns[1].bytes.flatMap(DatabaseRows.identifier),
         displayName: columns[2].string, isMarkedForDeletion: (columns[3].integer ?? 0) != 0)
     }
-    return DatabaseRows.sections(sections, inList: list.title)
+    return DatabaseRows.sections(sections, inList: list.title, ordering: sectionOrdering(of: row, in: database))
+  }
+
+  /// The list's `ZSECTIONIDSORDERINGASDATA`, or nil when it's empty or can't be read (such as on a database
+  /// without the column): the order only arranges sections, so it never makes reading them fail.
+  private func sectionOrdering(of row: DatabaseRows.List, in database: SQLiteDatabase) -> [UInt8]? {
+    let columns = try? database.rows(
+      "SELECT ZSECTIONIDSORDERINGASDATA FROM ZREMCDBASELIST WHERE Z_PK = ?", .integer(row.key))
+    return columns?.first?.first?.bytes
   }
 
   public func memberships(of list: ReminderList) throws(RemindersError) -> StoredMemberships {

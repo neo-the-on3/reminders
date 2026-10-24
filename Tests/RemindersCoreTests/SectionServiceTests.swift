@@ -60,7 +60,27 @@ struct SectionReadingTests {
     await #expect(throws: RemindersError.notImplemented("Sections")) {
       try await service.contents(ofList: "Groceries", section: "Dairy")
     }
+    await #expect(throws: RemindersError.notImplemented("Sections")) {
+      try await service.contents(ofList: "Groceries", unsectioned: true)
+    }
     await #expect(throws: RemindersError.notImplemented("Sections")) { try await service.sections(ofList: "Groceries") }
+  }
+
+  @Test("unsectioned keeps only the reminders in no section; with a section it's refused")
+  func unsectioned() async throws {
+    let (service, _, _) = makeService()
+    let others = try await service.contents(ofList: "groc", unsectioned: true)
+    #expect(others.reminders.map(\.title) == ["Bread"])
+    #expect(others.heading == "Groceries › No section")
+    do {
+      _ = try await service.contents(ofList: "Groceries", section: "Dairy", unsectioned: true)
+      Issue.record("expected INVALID_ARGUMENT")
+    } catch {
+      #expect(error.code == .invalidArgument)
+    }
+    // A list without sections has every reminder in none.
+    let (bare, _, _) = makeService(memberships: StoredMemberships(), sections: [])
+    #expect(try await bare.contents(ofList: "Groceries", unsectioned: true).reminders.count == 3)
   }
   @Test("list groups reminders in section order, whatever order the store returns them in")
   func sectionOrder() async throws {

@@ -60,16 +60,22 @@ public struct RemindersService: Sendable {
   }
 
   /// `reminders list <name>`: the list's incomplete reminders, then (optionally) its completed ones, each tagged
-  /// with its section. With `section`, only the reminders in that section.
+  /// with its section. With `section`, only the reminders in that section; with `unsectioned`, only those in none
+  /// (the ones Reminders shows under "Others").
   ///
   /// Sections come from the section store (on a Mac, ReminderKit). When it can't answer, the list is shown without
-  /// them, unless `section` asks for one.
+  /// them, unless `section` or `unsectioned` asks for them, which then fails.
   ///
   /// A list sorted manually in Reminders keeps that order (within each section); otherwise reminders are sorted by
   /// due date.
-  public func contents(ofList name: String, section: String? = nil, includeCompleted: Bool = false)
-    async throws(RemindersError) -> ReminderListing
-  {
+  public func contents(
+    ofList name: String, section: String? = nil, unsectioned: Bool = false, includeCompleted: Bool = false
+  ) async throws(RemindersError) -> ReminderListing {
+    if section != nil && unsectioned {
+      throw RemindersError(
+        .invalidArgument, "Choose either a section or the reminders in no section, not both",
+        suggestion: "Use --section <name> or --unsectioned")
+    }
     let list = try await lists().resolve(name)
     let manualOrder = await sectionStore.manualReminderOrder(of: list)
     var reminders = try await store.reminders(inLists: [list.id], .incomplete).ordered(by: manualOrder)
@@ -83,6 +89,11 @@ public struct RemindersService: Sendable {
       let wanted = try layout.sections.resolve(section)
       reminders = layout.tagging(reminders).filter { layout.sectionID(of: $0) == wanted.id }
       return ReminderListing(reminders, heading: "\(list.title) › \(wanted.displayName)", layout: order)
+    }
+    if unsectioned {
+      let layout = try await sectionLayout(of: list, for: reminders)
+      reminders = layout.tagging(reminders).filter { layout.sectionID(of: $0) == nil }
+      return ReminderListing(reminders, heading: "\(list.title) › No section", layout: order)
     }
     guard let layout = try? await sectionLayout(of: list, for: reminders) else {
       return ReminderListing(reminders, heading: list.title, layout: order)

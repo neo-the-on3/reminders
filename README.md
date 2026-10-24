@@ -8,7 +8,7 @@ assistants.
 > `search`, `add`, `complete`, `update`, `delete`, `create-list`, `delete-list`, `authorize` and `doctor` work
 > against Apple Reminders through EventKit, from the command line and as MCP tools; `setup-claude`,
 > `setup-claude-code` and `setup-cursor` register the MCP server with those clients. Sections go only through
-> ReminderKit, Reminders' private framework: `sections` and `list --section` read them, and `create-section`,
+> ReminderKit, Reminders' private framework: `sections`, `list --section` and `list --unsectioned` read them, and `create-section`,
 > `delete-section`, `move` and `add --section` change them, the way the Reminders app does. This tool never reads
 > or writes the Reminders database, so it needs Reminders access and nothing else (no Full Disk Access). `demo` arrives in
 > a follow-up PR; until then it fails with a structured `NOT_IMPLEMENTED` error.
@@ -231,7 +231,7 @@ Each tool runs the same operation as the CLI command, with the same name matchin
 | Tool | Arguments | Result (`structuredContent`) |
 | --- | --- | --- |
 | `reminders_lists` | — | `{"lists": [list]}` |
-| `reminders_list` | `list`, `section?`, `includeCompleted?` | `{"reminders": [reminder]}` |
+| `reminders_list` | `list`, `section?` or `unsectioned?`, `includeCompleted?` | `{"reminders": [reminder]}` |
 | `reminders_today`, `reminders_overdue` | — | `{"reminders": [reminder]}` |
 | `reminders_upcoming` | `days?` (default 7; due today through today + N, no overdue) | `{"reminders": [reminder]}` |
 | `reminders_search` | `query` | `{"reminders": [reminder]}` |
@@ -248,7 +248,7 @@ Each tool runs the same operation as the CLI command, with the same name matchin
 
 \* With `section`, the reminder is added and then moved into the section; if that second step fails, the error
 says the reminder was added. Sections are read and changed only through ReminderKit; where it's missing or
-changed, the section tools and a `section` filter fail with `REMINDERKIT_UNAVAILABLE`, and `reminders_list` still
+changed, the section tools and a `section` or `unsectioned` filter fail with `REMINDERKIT_UNAVAILABLE`, and `reminders_list` still
 works, without section names. Every section change is read back after saving; one Reminders accepted but didn't
 apply fails with `WRITE_NOT_APPLIED` rather than reporting success. `REMINDERS_DEBUG=1` prints, on standard error
 only, which selectors each section read used and every ReminderKit write step (selectors, classes, the save's
@@ -364,7 +364,9 @@ tool. Intentional differences:
 - **Usage errors exit 64.** A non-numeric `upcoming --days`, an unknown `--priority`, or an unsupported shell for
   `completions` is reported by the argument parser with exit status 64.
 - **Error codes.** Unknown sections report `SECTION_NOT_FOUND` (not `LIST_NOT_FOUND`). Unported commands and
-  options report `NOT_IMPLEMENTED`. `list --section` filters (the original accepted it but ignored it). Failed
+  options report `NOT_IMPLEMENTED`. `list --section` filters (the original accepted it but ignored it), and
+  `list --unsectioned` (an addition) keeps only the reminders in no section, which Reminders shows under
+  "Others"; the two together are `INVALID_ARGUMENT`. Failed
   EventKit saves and removals report `STORE_FAILURE`; a section change that isn't there when read back reports
   `WRITE_NOT_APPLIED`. The setup commands report `CONFIG_INVALID`,
   `CONFIG_CONFLICT` and `SETUP_FAILED`. Reminders commands on a platform without Apple Reminders

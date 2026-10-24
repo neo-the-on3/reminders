@@ -103,3 +103,20 @@ struct SectionObjectsTests {
     #expect(try SectionMemberships(storedData: stored.data).entries == entries)
   }
 }
+
+@Suite("Current memberships")
+struct CurrentMembershipsTests {
+  @Test("one entry per reminder, the newest, in the order reminders first appear")
+  func current() {
+    let memberships = SectionMemberships(entries: [
+      .init(reminderID: "M1", sectionID: "G1", modifiedOn: 5), .init(reminderID: "M2", sectionID: "G1", modifiedOn: 5),
+      .init(reminderID: "M1", sectionID: "G2", modifiedOn: 9), .init(reminderID: "M2", sectionID: "G3", modifiedOn: 1),
+    ])
+    #expect(
+      memberships.current == [
+        .init(reminderID: "M1", sectionID: "G2", modifiedOn: 9),
+        .init(reminderID: "M2", sectionID: "G1", modifiedOn: 5),
+      ])
+    #expect(memberships.sectionsByReminder == ["M1": "G2", "M2": "G1"])
+  }
+}

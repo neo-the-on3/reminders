@@ -55,12 +55,22 @@ public struct SectionMemberships: Sendable, Equatable {
   /// Each reminder's section. When a reminder is listed more than once, the entry modified last counts, as in
   /// Reminders' own merge; between entries with the same or no time, the later one in the data.
   public var sectionsByReminder: [String: String] {
+    Dictionary(current.map { ($0.reminderID, $0.sectionID) }, uniquingKeysWith: { _, last in last })
+  }
+
+  /// The entry that counts for each reminder (see ``sectionsByReminder``), in the order reminders first appear.
+  public var current: [Entry] {
     var newest: [String: Entry] = [:]
-    for entry in entries where (newest[entry.reminderID]?.modifiedOn ?? -.infinity) <= (entry.modifiedOn ?? -.infinity)
-    {
-      newest[entry.reminderID] = entry
+    var order: [String] = []
+    for entry in entries {
+      guard let previous = newest[entry.reminderID] else {
+        newest[entry.reminderID] = entry
+        order.append(entry.reminderID)
+        continue
+      }
+      if (previous.modifiedOn ?? -.infinity) <= (entry.modifiedOn ?? -.infinity) { newest[entry.reminderID] = entry }
     }
-    return newest.mapValues(\.sectionID)
+    return order.compactMap { newest[$0] }
   }
 }
 

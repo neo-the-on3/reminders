@@ -12,23 +12,33 @@
   public struct RuntimeReminderKit: ReminderKitBridge {
     static let frameworkPath = "/System/Library/PrivateFrameworks/ReminderKit.framework"
 
-    public init() {}
+    private let diagnostics: ReminderKitDiagnostics?
 
-    public func sections(in list: ReminderList) throws(RemindersError) -> [ReminderKitSection] {
+    /// - Parameter diagnostics: Receives each write step: the selectors sent, the classes they returned, and the
+    ///   save's result and error.
+    public init(diagnostics: ReminderKitDiagnostics? = nil) {
+      self.diagnostics = diagnostics
+    }
+
+    public func sections(in list: ReminderList) throws(RemindersError) -> ReminderKitSections {
       try withSession { session throws(RemindersError) in
         let storage = try session.storage(of: list).list
-        let sections = try session.sections(of: storage).compactMap(ReminderKitSession.section)
-        return DatabaseRows.arranged(sections, by: ReminderKitSession.sectionOrder(of: storage), identifier: \.id)
+        let objects = try session.sections(of: storage)
+        let dateKey = ReminderKitSession.creationDateKey(of: objects)
+        let order = ReminderKitSession.sectionOrder(of: storage)
+        return ReminderKitSections(
+          sections: objects.compactMap { ReminderKitSession.section($0, creationDateKey: dateKey) },
+          storedOrder: order?.value ?? [], storedOrderSelector: order?.selector, creationDateSelector: dateKey)
       }
     }
 
-    public func memberships(in list: ReminderList) throws(RemindersError) -> StoredMemberships? {
+    public func memberships(in list: ReminderList) throws(RemindersError) -> ReminderKitRead<StoredMemberships>? {
       try withSession { session throws(RemindersError) in
         ReminderKitSession.memberships(of: try session.storage(of: list).list)
       }
     }
 
-    public func manualReminderOrder(in list: ReminderList) throws(RemindersError) -> [String]? {
+    public func manualReminderOrder(in list: ReminderList) throws(RemindersError) -> ReminderKitRead<[String]?>? {
       try withSession { session throws(RemindersError) in
         ReminderKitSession.manualReminderOrder(of: try session.storage(of: list).list)
       }
@@ -44,11 +54,12 @@
       try withSession { session throws(RemindersError) in try session.deleteSection(id: id, in: list) }
     }
 
-    public func assign(reminderID: String, toSectionID sectionID: String, in list: ReminderList)
-      throws(RemindersError)
-    {
+    public func assign(
+      reminderID: String, toSectionID sectionID: String, in list: ReminderList,
+      keeping existing: [SectionMemberships.Entry]
+    ) throws(RemindersError) {
       try withSession { session throws(RemindersError) in
-        try session.assign(reminderID: reminderID, toSectionID: sectionID, in: list)
+        try session.assign(reminderID: reminderID, toSectionID: sectionID, in: list, keeping: existing)
       }
     }
 
@@ -58,7 +69,7 @@
     {
       let result: Result<T, RemindersError> = autoreleasepool {
         do throws(RemindersError) {
-          return .success(try body(try ReminderKitSession()))
+          return .success(try body(try ReminderKitSession(log: diagnostics)))
         } catch {
           return .failure(error)
         }
@@ -73,8 +84,10 @@
     let accountsView: NSObject
     let listsView: NSObject
     let sectionsView: NSObject
+    let log: ReminderKitDiagnostics?
 
-    init() throws(RemindersError) {
+    init(log: ReminderKitDiagnostics? = nil) throws(RemindersError) {
+      self.log = log
       try Runtime.loadFramework()
       store = try Runtime.make("REMStore")
       accountsView = try Runtime.make("REMAccountsDataView", initWithStore: store)
@@ -106,31 +119,54 @@
     }
 
     static func section(_ object: NSObject) -> ReminderKitSection? {
-      guard let id = Runtime.identifier(of: object) else { return nil }
-      return ReminderKitSection(id: id, displayName: Runtime.string(object, "displayName") ?? "")
+      section(object, creationDateKey: nil)
     }
 
-    /// The section identifiers in the list's arranged order, from whichever form this ReminderKit exposes: the
-    /// stored JSON or the identifiers themselves. Empty when it exposes neither; the sections then keep the order
-    /// they were fetched in.
-    static func sectionOrder(of list: NSObject) -> [String] {
-      if let data = Runtime.object(list, "sectionIDsOrderingAsData") as? NSData {
-        return DatabaseRows.sectionOrder([UInt8](data as Data))
+    static func section(_ object: NSObject, creationDateKey: String?) -> ReminderKitSection? {
+      guard let id = Runtime.identifier(of: object) else { return nil }
+      return ReminderKitSection(
+        id: id, displayName: Runtime.string(object, "displayName") ?? "",
+        createdAt: creationDateKey.flatMap { Runtime.object(object, $0) as? NSDate }.map { $0 as Date })
+    }
+
+    /// The creation-date property every one of `sections` responds to, if there is one.
+    static func creationDateKey(of sections: [NSObject]) -> String? {
+      ["creationDate", "createdDate", "dateCreated"].first { key in
+        !sections.isEmpty && sections.allSatisfy { $0.responds(to: NSSelectorFromString(key)) }
       }
-      return Runtime.object(list, "sectionIDsOrdering").map(Runtime.identifiers) ?? []
+    }
+
+    /// The section identifiers in the list's arranged order, from whichever form this ReminderKit exposes (the
+    /// stored JSON or the identifiers themselves), with the property it came from. Nil when neither has an order,
+    /// as when the list's stored ordering is NULL.
+    static func sectionOrder(of list: NSObject) -> ReminderKitRead<[String]>? {
+      if let data = Runtime.object(list, "sectionIDsOrderingAsData") as? NSData {
+        let order = DatabaseRows.sectionOrder([UInt8](data as Data))
+        if !order.isEmpty { return ReminderKitRead(order, via: "sectionIDsOrderingAsData") }
+      }
+      if let order = Runtime.object(list, "sectionIDsOrdering").map(Runtime.identifiers), !order.isEmpty {
+        return ReminderKitRead(order, via: "sectionIDsOrdering")
+      }
+      return nil
     }
 
     /// The list's memberships, from the stored JSON or from `REMMemberships`, whichever this ReminderKit exposes;
     /// nil when it exposes neither, or a shape this doesn't know.
-    static func memberships(of list: NSObject) -> StoredMemberships? {
+    static func memberships(of list: NSObject) -> ReminderKitRead<StoredMemberships>? {
       let dataKey = "membershipsOfRemindersInSectionsAsData"
       if list.responds(to: NSSelectorFromString(dataKey)) {
-        guard let data = Runtime.object(list, dataKey) as? NSData else { return StoredMemberships() }
-        return String(data: data as Data, encoding: .utf8).map { StoredMemberships(data: $0) }
+        guard let data = Runtime.object(list, dataKey) as? NSData else {
+          return ReminderKitRead(StoredMemberships(), via: dataKey)
+        }
+        return String(data: data as Data, encoding: .utf8).map {
+          ReminderKitRead(StoredMemberships(data: $0), via: dataKey)
+        }
       }
       let objectKey = "membershipsOfRemindersInSections"
       guard list.responds(to: NSSelectorFromString(objectKey)) else { return nil }
-      guard let memberships = Runtime.object(list, objectKey) else { return StoredMemberships() }
+      guard let memberships = Runtime.object(list, objectKey) else {
+        return ReminderKitRead(StoredMemberships(), via: objectKey)
+      }
       guard let all = Runtime.object(memberships, "memberships").flatMap(Runtime.elements) else { return nil }
       var entries: [SectionMemberships.Entry] = []
       for case let membership as NSObject in all {
@@ -144,40 +180,107 @@
             reminderID: member.uuidString.uppercased(), sectionID: isObsolete ? "" : group.uuidString.uppercased(),
             modifiedOn: (Runtime.object(membership, "modifiedOn") as? NSDate)?.timeIntervalSinceReferenceDate))
       }
-      return StoredMemberships(entries: entries)
+      return ReminderKitRead(StoredMemberships(entries: entries), via: "\(objectKey).memberships")
     }
 
-    /// `reminderIDsOrdering` when the list's `sortingStyle` says it's sorted manually; nil otherwise, including
-    /// when this ReminderKit has neither.
-    static func manualReminderOrder(of list: NSObject) -> [String]? {
-      guard let style = Runtime.string(list, "sortingStyle"), style.lowercased() == "manual",
-        let ordering = Runtime.object(list, "reminderIDsOrdering")
+    /// `reminderIDsOrdering` when the list's `sortingStyle` says it's sorted manually, nil inside when it says it
+    /// isn't; nil when this ReminderKit has either property missing or of an unknown type.
+    static func manualReminderOrder(of list: NSObject) -> ReminderKitRead<[String]?>? {
+      guard list.responds(to: NSSelectorFromString("reminderIDsOrdering")),
+        let style = Runtime.string(list, "sortingStyle")
       else { return nil }
+      guard style.lowercased() == "manual" else { return ReminderKitRead(nil, via: "sortingStyle") }
+      guard let ordering = Runtime.object(list, "reminderIDsOrdering") else {
+        return ReminderKitRead(nil, via: "sortingStyle, reminderIDsOrdering")
+      }
       let identifiers = Runtime.identifiers(in: ordering)
-      return identifiers.isEmpty ? nil : identifiers
+      return ReminderKitRead(identifiers.isEmpty ? nil : identifiers, via: "sortingStyle, reminderIDsOrdering")
     }
 
     // MARK: Changing
 
+    /// Logs one write step.
+    func step(_ line: @autoclosure () -> String) {
+      log?("write: " + line())
+    }
+
+    /// A new save request on this session's store, checked for the save it ends with.
+    func saveRequest() throws(RemindersError) -> NSObject {
+      let request = try Runtime.make("REMSaveRequest", initWithStore: store)
+      step("REMSaveRequest initWithStore: -> \(Runtime.className(request))")
+      try Runtime.require(["saveSynchronouslyWithError:"], on: request)
+      return request
+    }
+
+    /// The list's change item, tracked by `request` so what's staged on it is saved.
+    ///
+    /// As remctl does it: the list fetched as a `REMList` (`REMStore fetchListWithObjectID:error:`) and handed to
+    /// `REMSaveRequest updateList:`, which registers the change item with the request. A change item made with
+    /// `REMListChangeItem initWithSaveRequest:storage:...` isn't registered: memberships staged on it were dropped
+    /// on the Mac, saving nothing. That path is used only when `allowUntracked` (creating a section, which the
+    /// request itself tracks) and `updateList:` is missing.
+    func trackedListChange(
+      request: NSObject, storage: NSObject, account: NSObject, allowUntracked: Bool
+    ) throws(RemindersError) -> NSObject {
+      let fetchList = "fetchListWithObjectID:error:"
+      if request.responds(to: NSSelectorFromString("updateList:")), store.responds(to: NSSelectorFromString(fetchList)),
+        let objectID = Runtime.object(storage, "objectID")
+      {
+        let list = try Runtime.fetchObject(fetchList, on: store, objectID)
+        step("REMStore \(fetchList) \(Runtime.className(objectID)) -> \(Runtime.className(list))")
+        guard let change = try Runtime.send("updateList:", to: request, list) else {
+          throw RemindersError.reminderKitFailed("change the list", "updateList: returned nothing")
+        }
+        step("REMSaveRequest updateList: -> \(Runtime.className(change))")
+        return change
+      }
+      guard allowUntracked else {
+        throw RemindersError.reminderKitUnavailable(
+          "REMSaveRequest updateList: or REMStore \(fetchList) is missing")
+      }
+      let change = try Runtime.listChangeItem(
+        request: request, storage: storage, capabilities: Runtime.object(account, "capabilities"))
+      step(
+        "updateList: unavailable; REMListChangeItem initWithSaveRequest:storage:accountCapabilities:"
+          + "observeInitialValues: -> \(Runtime.className(change))")
+      return change
+    }
+
+    /// The list change's sections context.
+    func sectionsContext(of listChange: NSObject, for action: String) throws(RemindersError) -> NSObject {
+      guard let context = try Runtime.send("sectionsContextChangeItem", to: listChange) else {
+        throw RemindersError.reminderKitFailed(action, "the list has no sections context")
+      }
+      step("sectionsContextChangeItem -> \(Runtime.className(context))")
+      return context
+    }
+
+    func save(_ request: NSObject, _ action: String) throws(RemindersError) {
+      do throws(RemindersError) {
+        let warning = try Runtime.save(request, action)
+        step("saveSynchronouslyWithError: -> true, error: \(warning.map { "\($0.domain) \($0.code)" } ?? "nil")")
+      } catch {
+        step("saveSynchronouslyWithError: -> false, error: \(error.message)")
+        throw error
+      }
+    }
+
     func createSection(named name: String, in list: ReminderList) throws(RemindersError) -> ReminderKitSection {
       let (storage, account) = try storage(of: list)
+      step("create section: list \(Runtime.className(storage)) \(Runtime.identifier(of: storage) ?? "?")")
       let before = Set(try sections(of: storage).compactMap(Self.section).map(\.id))
-      let request = try Runtime.make("REMSaveRequest", initWithStore: store)
-      let listChange = try Runtime.listChangeItem(
-        request: request, storage: storage, capabilities: Runtime.object(account, "capabilities"))
-      guard let sectionsContext = try Runtime.send("sectionsContextChangeItem", to: listChange) else {
-        throw RemindersError.reminderKitFailed("create section \"\(name)\"", "the list has no sections context")
-      }
+      let request = try saveRequest()
+      let listChange = try trackedListChange(request: request, storage: storage, account: account, allowUntracked: true)
+      let context = try sectionsContext(of: listChange, for: "create section \"\(name)\"")
       let added = try Runtime.send(
-        "addListSectionWithDisplayName:toListSectionContextChangeItem:", to: request, name as NSString,
-        sectionsContext)
-      try Runtime.save(request, "create section \"\(name)\" in \"\(list.title)\"")
+        "addListSectionWithDisplayName:toListSectionContextChangeItem:", to: request, name as NSString, context)
+      step("addListSectionWithDisplayName:toListSectionContextChangeItem: -> \(added.map(Runtime.className) ?? "nil")")
+      try save(request, "create section \"\(name)\" in \"\(list.title)\"")
       if let added, let section = Self.section(added) { return section }
       // Not every version returns the new section; then it's the one with that name that wasn't there before.
       let after = try sections(of: storage).compactMap(Self.section)
       guard let section = after.first(where: { $0.displayName == name && !before.contains($0.id) }) else {
-        throw RemindersError.reminderKitFailed(
-          "find the new section \"\(name)\" in \"\(list.title)\"", "it was saved but isn't listed")
+        throw RemindersError.writeNotApplied("section \"\(name)\" was saved but isn't listed in \"\(list.title)\"")
       }
       return section
     }
@@ -188,44 +291,65 @@
       else {
         throw RemindersError(.sectionNotFound, "ReminderKit has no section \(id) in \"\(list.title)\"")
       }
-      let request = try Runtime.make("REMSaveRequest", initWithStore: store)
+      step("delete section: \(Runtime.className(section)) \(id.uppercased())")
+      let request = try saveRequest()
       // Everything the deletion needs is checked before it's staged; nothing is saved until the one save at the end.
-      try Runtime.require(["updateListSection:", "saveSynchronouslyWithError:"], on: request)
+      try Runtime.require(["updateListSection:"], on: request)
       // A tracked change, so the deletion syncs; removing the object alone wouldn't.
       guard let change = try Runtime.send("updateListSection:", to: request, section) else {
         throw RemindersError.reminderKitFailed("delete the section", "updateListSection: returned nothing")
       }
+      step("REMSaveRequest updateListSection: -> \(Runtime.className(change))")
       try Runtime.require(["removeFromList"], on: change)
       _ = try Runtime.send("removeFromList", to: change)
-      try Runtime.save(request, "delete the section from \"\(list.title)\"")
+      step("removeFromList")
+      try save(request, "delete the section from \"\(list.title)\"")
     }
   }
 
   extension ReminderKitSession {
-    /// Puts a reminder in a section the way the Reminders app does: a membership handed to the list's sections
-    /// context in one save request. Reminders merges it into the list's membership data (the newest membership of
-    /// a reminder wins), writes that data's checksum, and syncs it.
-    func assign(reminderID: String, toSectionID sectionID: String, in list: ReminderList) throws(RemindersError) {
+    /// Puts a reminder in a section the way the Reminders app (and remctl) does: memberships handed to the sections
+    /// context of the list's tracked change item, in one save request. Reminders writes the membership data, its
+    /// checksum and sync metadata itself.
+    ///
+    /// The list's current memberships go with the new one (each with its own time), so the result is the same
+    /// whether ReminderKit merges what it's given into the stored set or replaces the set with it.
+    func assign(
+      reminderID: String, toSectionID sectionID: String, in list: ReminderList,
+      keeping existing: [SectionMemberships.Entry]
+    ) throws(RemindersError) {
       guard let member = UUID(uuidString: reminderID), let group = UUID(uuidString: sectionID) else {
         throw RemindersError(.invalidArgument, "Not a reminder and section identifier: \(reminderID), \(sectionID)")
       }
       let (storage, account) = try storage(of: list)
+      step("move: list \(Runtime.className(storage)) \(Runtime.identifier(of: storage) ?? "?")")
       guard try sections(of: storage).contains(where: { Runtime.identifier(of: $0) == group.uuidString }) else {
         throw RemindersError(.sectionNotFound, "ReminderKit has no section \(sectionID) in \"\(list.title)\"")
       }
       // Everything is checked and built before the one save; a failure on the way saves nothing.
-      let membership = try Runtime.membership(member: member, group: group, modifiedOn: Date())
-      let memberships = try Runtime.make("REMMemberships", "initWithMemberships:", [membership] as NSArray)
-      let request = try Runtime.make("REMSaveRequest", initWithStore: store)
-      try Runtime.require(["saveSynchronouslyWithError:"], on: request)
-      let listChange = try Runtime.listChangeItem(
-        request: request, storage: storage, capabilities: Runtime.object(account, "capabilities"))
-      guard let sectionsContext = try Runtime.send("sectionsContextChangeItem", to: listChange) else {
-        throw RemindersError.reminderKitFailed("move the reminder", "the list has no sections context")
+      var memberships: [NSObject] = []
+      for entry in existing where entry.reminderID.uppercased() != member.uuidString {
+        guard let other = UUID(uuidString: entry.reminderID), let otherGroup = UUID(uuidString: entry.sectionID) else {
+          continue
+        }
+        memberships.append(
+          try Runtime.membership(
+            member: other, group: otherGroup,
+            modifiedOn: Date(timeIntervalSinceReferenceDate: entry.modifiedOn ?? 0)))
       }
-      try Runtime.require(["setUnsavedMembershipsOfRemindersInSections:"], on: sectionsContext)
-      _ = try Runtime.send("setUnsavedMembershipsOfRemindersInSections:", to: sectionsContext, memberships)
-      try Runtime.save(request, "move the reminder to the section in \"\(list.title)\"")
+      memberships.append(try Runtime.membership(member: member, group: group, modifiedOn: Date()))
+      let set = try Runtime.make("REMMemberships", "initWithMemberships:", memberships as NSArray)
+      step(
+        "REMMembership initWithMemberIdentifier:groupIdentifier:isObsolete:modifiedOn: x\(memberships.count), "
+          + "REMMemberships initWithMemberships: -> \(Runtime.className(set))")
+      let request = try saveRequest()
+      let listChange = try trackedListChange(
+        request: request, storage: storage, account: account, allowUntracked: false)
+      let context = try sectionsContext(of: listChange, for: "move the reminder")
+      try Runtime.require(["setUnsavedMembershipsOfRemindersInSections:"], on: context)
+      _ = try Runtime.send("setUnsavedMembershipsOfRemindersInSections:", to: context, set)
+      step("setUnsavedMembershipsOfRemindersInSections: (\(member.uuidString) -> \(group.uuidString))")
+      try save(request, "move the reminder to the section in \"\(list.title)\"")
     }
   }
 
@@ -361,14 +485,36 @@
       return objects
     }
 
-    /// Saves `request`, waiting until Reminders has it.
-    static func save(_ request: NSObject, _ action: String) throws(RemindersError) {
+    /// The one object an `...error:` fetch taking one argument returns.
+    static func fetchObject(_ name: String, on object: NSObject, _ argument: NSObject) throws(RemindersError)
+      -> NSObject
+    {
+      let (selector, imp) = try implementation(name, on: object)
+      var error: NSError?
+      typealias Fetch =
+        @convention(c) (AnyObject, Selector, AnyObject, AutoreleasingUnsafeMutablePointer<NSError?>) -> AnyObject?
+      guard let result = unsafeBitCast(imp, to: Fetch.self)(object, selector, argument, &error) as? NSObject else {
+        throw .reminderKitFailed("read its data (\(name))", error?.localizedDescription ?? "nothing came back")
+      }
+      return result
+    }
+
+    static func className(_ object: NSObject) -> String {
+      NSStringFromClass(Swift.type(of: object))
+    }
+
+    /// Saves `request`, waiting until Reminders has it. Returns the error ReminderKit set even though the save
+    /// succeeded, if it set one.
+    @discardableResult
+    static func save(_ request: NSObject, _ action: String) throws(RemindersError) -> NSError? {
       let (selector, imp) = try implementation("saveSynchronouslyWithError:", on: request)
       typealias Save = @convention(c) (AnyObject, Selector, AutoreleasingUnsafeMutablePointer<NSError?>) -> ObjCBool
       var error: NSError?
       guard unsafeBitCast(imp, to: Save.self)(request, selector, &error).boolValue else {
-        throw .reminderKitFailed(action, error?.localizedDescription ?? "the save failed")
+        let detail = error.map { "\($0.domain) \($0.code): \($0.localizedDescription)" } ?? "the save failed"
+        throw .reminderKitFailed(action, detail)
       }
+      return error
     }
 
     // MARK: Properties

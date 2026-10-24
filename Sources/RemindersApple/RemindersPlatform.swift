@@ -19,6 +19,14 @@ public enum RemindersPlatform {
     #endif
   }
 
+  /// Set to `1` to print, on standard error, where each section read came from and each ReminderKit write step.
+  public static let debugVariable = "REMINDERS_DEBUG"
+
+  /// Writes a diagnostic line to standard error, never standard output, so `--json` output stays clean.
+  @Sendable static func debugToStandardError(_ line: String) {
+    FileHandle.standardError.write(Data("reminders debug: \(line)\n".utf8))
+  }
+
   /// Set to `1` to read sections from the Reminders database rather than through ReminderKit.
   public static let sectionsFromDatabaseVariable = "REMINDERS_SECTIONS_FROM_DATABASE"
 
@@ -30,11 +38,14 @@ public enum RemindersPlatform {
     environment: [String: String] = ProcessInfo.processInfo.environment
   ) -> any SectionStore {
     #if os(macOS)
-      AppleSectionStore(
-        database: DatabaseSectionStore(system: system, permissions: permissions), reminderKit: RuntimeReminderKit(),
-        readsThroughReminderKit: environment[sectionsFromDatabaseVariable] != "1")
+      let debug: ReminderKitDiagnostics? = environment[debugVariable] == "1" ? debugToStandardError : nil
+      return AppleSectionStore(
+        database: DatabaseSectionStore(system: system, permissions: permissions),
+        reminderKit: RuntimeReminderKit(diagnostics: debug),
+        readsThroughReminderKit: environment[sectionsFromDatabaseVariable] != "1",
+        diagnostics: debug)
     #else
-      NoSectionStore()
+      return NoSectionStore()
     #endif
   }
 

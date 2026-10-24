@@ -1,3 +1,4 @@
+import Foundation
 import RemindersCore
 
 /// Sections through ReminderKit, the private framework the Reminders app itself uses.
@@ -9,33 +10,84 @@ import RemindersCore
 /// uses, so a macOS release that changes them fails with ``RemindersError/Code/reminderKitUnavailable`` rather than
 /// crashing. Tests use a fake.
 public protocol ReminderKitBridge: Sendable {
-  /// The list's sections, in the order the user arranged them.
-  func sections(in list: ReminderList) throws(RemindersError) -> [ReminderKitSection]
+  /// The list's sections as ReminderKit fetches them, with what it exposes about their order.
+  func sections(in list: ReminderList) throws(RemindersError) -> ReminderKitSections
   /// The list's membership data, or nil when this ReminderKit doesn't expose it.
-  func memberships(in list: ReminderList) throws(RemindersError) -> StoredMemberships?
-  /// The list's reminder identifiers (upper-case dashed UUIDs) in the order the user arranged them, when the list is
-  /// sorted manually; nil when it isn't, or when this ReminderKit doesn't say.
-  func manualReminderOrder(in list: ReminderList) throws(RemindersError) -> [String]?
+  func memberships(in list: ReminderList) throws(RemindersError) -> ReminderKitRead<StoredMemberships>?
+  /// The list's reminder identifiers (upper-case dashed UUIDs) in the order the user arranged them; the value is
+  /// nil when the list isn't sorted manually. Nil when this ReminderKit doesn't say.
+  func manualReminderOrder(in list: ReminderList) throws(RemindersError) -> ReminderKitRead<[String]?>?
   /// Creates a section and returns it.
   func createSection(named name: String, in list: ReminderList) throws(RemindersError) -> ReminderKitSection
   /// Deletes the section with identifier `id`.
   func deleteSection(id: String, in list: ReminderList) throws(RemindersError)
   /// Puts the reminder with identifier `reminderID` in the section `sectionID` (both upper-case dashed UUIDs),
-  /// taking it out of any other section.
-  func assign(reminderID: String, toSectionID sectionID: String, in list: ReminderList) throws(RemindersError)
+  /// taking it out of any other section. `existing` is the list's current memberships, handed over with the new one
+  /// so the save never depends on ReminderKit merging a partial set.
+  func assign(
+    reminderID: String, toSectionID sectionID: String, in list: ReminderList,
+    keeping existing: [SectionMemberships.Entry]
+  ) throws(RemindersError)
 }
+
+/// Receives one diagnostic line at a time (for `REMINDERS_DEBUG`).
+public typealias ReminderKitDiagnostics = @Sendable (String) -> Void
 
 /// A section as ReminderKit reports it.
 public struct ReminderKitSection: Hashable, Sendable {
   /// Upper-case dashed UUID, as in the database and the membership data.
   public var id: String
   public var displayName: String
+  /// When the section was created, if ReminderKit says.
+  public var createdAt: Date?
 
-  public init(id: String, displayName: String) {
+  public init(id: String, displayName: String, createdAt: Date? = nil) {
     self.id = id
     self.displayName = displayName
+    self.createdAt = createdAt
   }
 }
+
+/// A list's sections as ReminderKit fetches them, and the order information it exposes.
+///
+/// The fetch order isn't the order the user sees: on the Mac it came back newest first. The arranged order is the
+/// list's stored section ordering, when it has one; sections it doesn't name go in creation order.
+public struct ReminderKitSections: Hashable, Sendable {
+  /// In the order ReminderKit fetched them.
+  public var sections: [ReminderKitSection]
+  /// The fetch that returned them, for diagnostics.
+  public var fetchSelector: String
+  /// The list's stored section order (upper-case dashed UUIDs); empty when it has none.
+  public var storedOrder: [String]
+  /// The property `storedOrder` came from; nil when none had one.
+  public var storedOrderSelector: String?
+  /// The property each section's `createdAt` came from; nil when sections expose no creation date.
+  public var creationDateSelector: String?
+
+  public init(
+    sections: [ReminderKitSection], fetchSelector: String = "fetchListSectionsInList:error:",
+    storedOrder: [String] = [], storedOrderSelector: String? = nil, creationDateSelector: String? = nil
+  ) {
+    self.sections = sections
+    self.fetchSelector = fetchSelector
+    self.storedOrder = storedOrder
+    self.storedOrderSelector = storedOrderSelector
+    self.creationDateSelector = creationDateSelector
+  }
+}
+
+/// A value read through ReminderKit, with the selector it came from, for diagnostics.
+public struct ReminderKitRead<Value: Sendable>: Sendable {
+  public var value: Value
+  public var selector: String
+
+  public init(_ value: Value, via selector: String) {
+    self.value = value
+    self.selector = selector
+  }
+}
+
+extension ReminderKitRead: Equatable where Value: Equatable {}
 
 extension RemindersError {
   /// ReminderKit, or a part of it this tool relies on, isn't there.

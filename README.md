@@ -241,7 +241,10 @@ says the reminder was added. Reading sections falls back to the
 Reminders database where ReminderKit can't answer, which needs Full Disk Access for the app running the server;
 without it, the section tools and a `section` filter fail with
 `PERMISSION_DENIED`, and `reminders_list` still works, without section names. Creating and deleting sections and
-moving reminders into them also need ReminderKit; where it's missing or changed they fail with `REMINDERKIT_UNAVAILABLE`.
+moving reminders into them also need ReminderKit; where it's missing or changed they fail with `REMINDERKIT_UNAVAILABLE`. Every
+section change is read back after saving; one Reminders accepted but didn't apply fails with `WRITE_NOT_APPLIED`
+rather than reporting success. `REMINDERS_DEBUG=1` prints, on standard error only, which reader and selectors each
+section read used and every ReminderKit write step (selectors, classes, the save's result and error).
 
 Every tool publishes a JSON Schema for its input (unknown arguments are rejected) and for its output, and carries annotations (`readOnlyHint` on queries, `destructiveHint` on deletions).
 Results come back both as `structuredContent` and as the same JSON in a text block. Failures are tool errors
@@ -355,7 +358,8 @@ tool. Intentional differences:
   `completions` is reported by the argument parser with exit status 64.
 - **Error codes.** Unknown sections report `SECTION_NOT_FOUND` (not `LIST_NOT_FOUND`). Unported commands and
   options report `NOT_IMPLEMENTED`. `list --section` filters (the original accepted it but ignored it). Failed
-  EventKit saves and removals report `STORE_FAILURE`. The setup commands report `CONFIG_INVALID`,
+  EventKit saves and removals report `STORE_FAILURE`; a section change that isn't there when read back reports
+  `WRITE_NOT_APPLIED`. The setup commands report `CONFIG_INVALID`,
   `CONFIG_CONFLICT` and `SETUP_FAILED`. Reminders commands on a platform without Apple Reminders
   report `UNSUPPORTED_PLATFORM`.
 - **Permissions.** `doctor` never shows the permission prompt. It reports each access state separately (not

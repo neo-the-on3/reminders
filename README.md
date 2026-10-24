@@ -7,16 +7,15 @@ assistants.
 > **Status: lists and reminders work; sections can be read, created, deleted and filled.** `lists`, `list`, `today`, `overdue`, `upcoming`,
 > `search`, `add`, `complete`, `update`, `delete`, `create-list`, `delete-list`, `authorize` and `doctor` work
 > against Apple Reminders through EventKit, from the command line and as MCP tools; `setup-claude`,
-> `setup-claude-code` and `setup-cursor` register the MCP server with those clients. `sections` and
-> `list --section` read sections from the Reminders database (they need Full Disk Access); `create-section`,
-> `delete-section`, `move` and `add --section` change them only through ReminderKit, Reminders' private framework
-> (this tool never writes the Reminders database), and are not yet verified against iCloud sync. `demo` arrives in
+> `setup-claude-code` and `setup-cursor` register the MCP server with those clients. Sections go only through
+> ReminderKit, Reminders' private framework: `sections` and `list --section` read them, and `create-section`,
+> `delete-section`, `move` and `add --section` change them, the way the Reminders app does. This tool never reads
+> or writes the Reminders database, so it needs Reminders access and nothing else (no Full Disk Access). `demo` arrives in
 > a follow-up PR; until then it fails with a structured `NOT_IMPLEMENTED` error.
 
 ## Requirements
 
-- macOS 26 or later to use it. Linux builds and tests the platform-independent core for development and CI; it
-  needs SQLite's headers (`sudo apt-get install libsqlite3-dev`).
+- macOS 26 or later to use it. Linux builds and tests the platform-independent core for development and CI.
 - Swift 6.4.1 and SwiftLint 0.65.1, pinned in [`mise.toml`](mise.toml). Install [mise](https://mise.jdx.dev),
   then run `mise install`. On a Mac, Xcode 26's Swift 6.x toolchain also works.
 - Formatting uses Apple's [swift-format](https://github.com/swiftlang/swift-format) (`swift format`), which ships
@@ -236,10 +235,12 @@ Each tool runs the same operation as the CLI command, with the same name matchin
 | `reminders_move` | `list`, `title` or `id`, `toSection` | `{"message"}` |
 
 \* With `section`, the reminder is added and then moved into the section; if that second step fails, the error
-says the reminder was added. Reading sections needs Full Disk
-Access for the app running the server; without it, the section tools and a `section` filter fail with
-`PERMISSION_DENIED`, and `reminders_list` still works, without section names. Creating and deleting sections and
-moving reminders into them also need ReminderKit; where it's missing or changed they fail with `REMINDERKIT_UNAVAILABLE`.
+says the reminder was added. Sections are read and changed only through ReminderKit; where it's missing or
+changed, the section tools and a `section` filter fail with `REMINDERKIT_UNAVAILABLE`, and `reminders_list` still
+works, without section names. Every section change is read back after saving; one Reminders accepted but didn't
+apply fails with `WRITE_NOT_APPLIED` rather than reporting success. `REMINDERS_DEBUG=1` prints, on standard error
+only, which selectors each section read used and every ReminderKit write step (selectors, classes, the save's
+result and error).
 
 Every tool publishes a JSON Schema for its input (unknown arguments are rejected) and for its output, and carries annotations (`readOnlyHint` on queries, `destructiveHint` on deletions).
 Results come back both as `structuredContent` and as the same JSON in a text block. Failures are tool errors
@@ -260,17 +261,17 @@ Five targets with one-way dependencies (`RemindersCLI` → `RemindersMCP`, `Remi
   - `Presentation/`: `Console` sends any `ConsoleRepresentable` result (`ListOverview`, `ReminderListing`,
     `Confirmation`, …) either to `TextRenderer` or, with `--json`, through `JSONEncoder` into a
     `{"success": true, "data": …}` envelope; failures become `{"success": false, "error": …}`.
-  - `SectionSync/`: reading what Reminders stores for sections: `SectionMemberships` decodes a list's
-    memberships (the newest entry for a reminder wins). Nothing here writes them; changes go through ReminderKit,
-    which also keeps Reminders' checksum and sync metadata up to date.
+  - `SectionSync/`: Reminders' section data formats: `SectionMemberships` reads memberships (the newest entry for
+    a reminder wins) and `SectionOrdering` the arranged section order. Nothing here writes them; changes go through
+    ReminderKit, which also keeps Reminders' checksum and sync metadata up to date.
   - `Store/`: the `ReminderStore` protocol (`Sendable`, async, typed throws), which is everything the commands
     need from a reminders database, plus `InMemoryReminderStore`, an actor used by the tests. Sections have their
-    own `SectionStore`, because EventKit has none: it reads a list's sections and its raw stored memberships,
-    creates and deletes sections, and assigns a reminder to a section.
+    own `SectionStore`, because EventKit has none: it reads a list's sections and which section given reminders
+    are in, creates and deletes sections, and assigns a reminder to a section.
   - `Service/`: `RemindersService`, the commands as operations on any store: access checks, list resolution,
     counts, the today/overdue/upcoming/search filters and the changes. It returns `ConsoleRepresentable` values.
   - `Diagnostics/`: `doctor`'s checks and `authorize`'s steps, against a `SystemProbe` (macOS version, embedded
-    Info.plist, database directory, opening System Settings).
+    Info.plist, whether ReminderKit has what sections need, opening System Settings).
   - `MCPSetup/`: the setup commands. `MCPConfigDocument` merges the `reminders` entry into a client's
     `mcpServers`, `ConfigFile` backs up and atomically replaces the file, `ExecutableLocation` picks a path that
     survives Homebrew upgrades, and `ClaudeCodeRegistration` builds the `claude mcp` commands, run through a
@@ -279,12 +280,13 @@ Five targets with one-way dependencies (`RemindersCLI` → `RemindersMCP`, `Remi
   - `RemindersError`: one error type with stable machine-readable codes; core APIs use typed throws.
 - **`RemindersApple`**: the platform. `EventKitReminderStore` is an actor that owns the `EKEventStore`;
   EventKit objects never leave it (fetches convert to `Reminder` values, changes look items up by identifier).
-  `DatabaseSectionStore` reads sections from Reminders' SQLite databases (one per account) through a
-  `SQLiteDatabase` connection that is opened read-only, via the `CSQLite` system library (`libsqlite3-dev` on
-  Linux). `AppleSectionStore` adds creating and deleting sections, and moving reminders into them, through a
-  `ReminderKitBridge`, implemented
-  by `RuntimeReminderKit`, which loads the private ReminderKit framework at run time (nothing links against it)
-  and checks each class and method before calling it. `MacSystemProbe` provides the machine facts. It compiles everywhere: off macOS,
+  `AppleSectionStore` reads, creates and deletes sections and moves reminders into them only through a
+  `ReminderKitBridge`. The bridge is implemented by `RuntimeReminderKit`, which loads the private ReminderKit
+  framework at run time (nothing links against it) and checks each class and method before calling it. ReminderKit
+  has no getter for a list's stored memberships, so it asks for each reminder's section
+  (`REMListSectionsDataView fetchListSectionWithReminderID:error:`). The hidden
+  `reminders debug-reminderkit --list <name>` command prints, read-only, what this Mac's ReminderKit exposes for a
+  list's sections, memberships and order. `MacSystemProbe` provides the machine facts. It compiles everywhere: off macOS,
   `UnsupportedPlatformStore` answers every call with `UNSUPPORTED_PLATFORM`.
 - **`RemindersMCP`**: the MCP server on the official [MCP Swift SDK](https://github.com/modelcontextprotocol/swift-sdk)
   (pinned to 0.12.1). `ReminderTool` is an enum of the tools with their schemas and annotations;
@@ -307,11 +309,9 @@ Five targets with one-way dependencies (`RemindersCLI` → `RemindersMCP`, `Remi
   [`scripts/date-reference-cases.mjs`](scripts/date-reference-cases.mjs) (instructions inside).
 - **Text output**: the human-readable output for a fixed sample, with colour off and on and verbose or not, must
   match [`RenderingFixtures.swift`](Tests/RemindersCoreTests/RenderingFixtures.swift) byte for byte.
-- **Sections**: memberships are read from the stored data in
-  [`SectionFixtures.swift`](Tests/RemindersCoreTests/Fixtures/SectionFixtures.swift). Those fixtures follow the
-  documented formats until they're replaced by real data: on a Mac, run
-  [`scripts/capture-section-fixtures.sh`](scripts/capture-section-fixtures.sh) `"<throwaway list>"`, which copies
-  the Reminders database and reads only the copy.
+- **Sections**: memberships are read from data in Reminders' format in
+  [`SectionFixtures.swift`](Tests/RemindersCoreTests/Fixtures/SectionFixtures.swift), which follows the documented
+  format.
 
 The completion tests also syntax-check each generated script with `bash -n`, `zsh -n` and `fish -n` when those
 shells are installed. Every command is also tested end to end against `InMemoryReminderStore`, and so is every
@@ -353,7 +353,8 @@ tool. Intentional differences:
   `completions` is reported by the argument parser with exit status 64.
 - **Error codes.** Unknown sections report `SECTION_NOT_FOUND` (not `LIST_NOT_FOUND`). Unported commands and
   options report `NOT_IMPLEMENTED`. `list --section` filters (the original accepted it but ignored it). Failed
-  EventKit saves and removals report `STORE_FAILURE`. The setup commands report `CONFIG_INVALID`,
+  EventKit saves and removals report `STORE_FAILURE`; a section change that isn't there when read back reports
+  `WRITE_NOT_APPLIED`. The setup commands report `CONFIG_INVALID`,
   `CONFIG_CONFLICT` and `SETUP_FAILED`. Reminders commands on a platform without Apple Reminders
   report `UNSUPPORTED_PLATFORM`.
 - **Permissions.** `doctor` never shows the permission prompt. It reports each access state separately (not
@@ -362,11 +363,11 @@ tool. Intentional differences:
   points to `authorize`. Write-only access is not enough. A `Permissions app` check shows what macOS asks about
   (`reminders (this tool)` in that case). The original always named the launching app.
 - **`doctor` and `authorize` exit 1 on failure, with or without `--json`.** `doctor` fails when any check fails;
-  `authorize` fails unless Reminders access ends up fully granted (Full Disk Access is only needed for sections
-  and doesn't count). With `--json` both still print their result on stdout, as
+  `authorize` fails unless Reminders access ends up fully granted, the only permission it needs. With `--json`
+  both still print their result on stdout, as
   `{"success": false, "data": ..., "error": ...}` when they fail: `CHECKS_FAILED` for `doctor`,
-  `PERMISSION_DENIED` for `authorize`. `authorize --json` prints the outcome (`remindersAccess`,
-  `databaseAccess`, `host`) instead of nothing.
+  `PERMISSION_DENIED` for `authorize`. `authorize --json` prints the outcome (`remindersAccess`, `host`) instead
+  of nothing.
 - **Overdue** has one meaning everywhere: incomplete and due on a day before today. `lists` counts, listing
   headings and `overdue` agree. The original also counted reminders due today in `lists`, and completed reminders
   in headings.

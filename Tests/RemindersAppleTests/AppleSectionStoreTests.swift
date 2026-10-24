@@ -48,6 +48,13 @@ private final class FakeReminderKit: ReminderKitBridge {
       state.calls.append("delete \(id) in \(list.title)")
     }
   }
+
+  func assign(reminderID: String, toSectionID sectionID: String, in list: ReminderList) throws(RemindersError) {
+    try state.withLock { state throws(RemindersError) in
+      if let failure = state.failure { throw failure }
+      state.calls.append("assign \(reminderID) to \(sectionID) in \(list.title)")
+    }
+  }
 }
 
 private struct Setup {
@@ -64,7 +71,7 @@ private struct Setup {
       "local",
       """
       INSERT INTO ZREMCDBASELIST VALUES (7, 2, 0, \(Builder.blob(listID)), 'Groceries', \
-      \(Builder.blob(utf8: storedData)), \(Builder.text(SectionMemberships.checksum(of: storedData))), NULL);
+      \(Builder.blob(utf8: storedData)), NULL, NULL);
       INSERT INTO ZREMCDBASESECTION VALUES (11, 3, 0, 7, \(Builder.blob(dairyID)), 'Dairy', 782000000);
       """)
     store = AppleSectionStore(
@@ -137,5 +144,18 @@ struct AppleSectionStoreTests {
       try await setup.service.deleteSection(named: "Dairy", inList: "Groceries")
     }
     #expect(try await setup.service.sections(ofList: "Groceries").sections.map(\.displayName) == ["Dairy"])
+  }
+
+  @Test("move asks ReminderKit to assign the reminder and leaves the database alone")
+  func move() async throws {
+    let setup = try Setup()
+    let before = try Data(contentsOf: URL(filePath: setup.path))
+    _ = try await setup.store.createSection(named: "Frozen", in: groceries)
+    let frozen = try #require(setup.reminderKit.state.withLock { $0.sections.first { $0.displayName == "Frozen" } })
+    try await setup.store.assign(
+      reminderID: milkID, to: Section(id: frozen.id, displayName: "Frozen", listName: "Groceries", sortOrder: 1),
+      in: groceries)
+    #expect(setup.reminderKit.state.withLock(\.calls).last == "assign \(milkID) to \(frozen.id) in Groceries")
+    #expect(try Data(contentsOf: URL(filePath: setup.path)) == before)
   }
 }

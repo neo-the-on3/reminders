@@ -14,6 +14,9 @@ public protocol ReminderKitBridge: Sendable {
   func createSection(named name: String, in list: ReminderList) throws(RemindersError) -> ReminderKitSection
   /// Deletes the section with identifier `id`.
   func deleteSection(id: String, in list: ReminderList) throws(RemindersError)
+  /// Puts the reminder with identifier `reminderID` in the section `sectionID` (both upper-case dashed UUIDs),
+  /// taking it out of any other section.
+  func assign(reminderID: String, toSectionID sectionID: String, in list: ReminderList) throws(RemindersError)
 }
 
 /// A section as ReminderKit reports it.

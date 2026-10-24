@@ -1,8 +1,9 @@
-// JSON for data Reminders itself stores (section memberships, resolution token maps).
+// JSON for files whose layout must survive an edit (MCP client configs), also used to read the section
+// memberships Reminders stores.
 //
-// Those values are rewritten in place and the membership data is checksummed over its exact bytes, so edits must
-// keep existing key order and unknown fields, and write compact JSON with integral numbers printed without a
-// fraction. Foundation's JSONSerialization/JSONEncoder don't guarantee either, hence this small ordered model.
+// Edits must keep existing key order and unknown fields, and write compact JSON with integral numbers printed
+// without a fraction. Foundation's JSONSerialization/JSONEncoder don't guarantee either, hence this small ordered
+// model.
 // Command output (`--json`) uses JSONEncoder instead.
 
 /// A JSON value whose objects keep their key order.

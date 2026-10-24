@@ -38,13 +38,9 @@ public struct DatabaseSectionStore: SectionStore {
   public func memberships(of list: ReminderList) throws(RemindersError) -> StoredMemberships {
     let (database, row) = try locate(list)
     let columns = try database.rows(
-      """
-      SELECT ZMEMBERSHIPSOFREMINDERSINSECTIONSASDATA, ZMEMBERSHIPSOFREMINDERSINSECTIONSCHECKSUM,
-        ZRESOLUTIONTOKENMAP_V3_JSONDATA
-      FROM ZREMCDBASELIST WHERE Z_PK = ?
-      """, .integer(row.key)
+      "SELECT ZMEMBERSHIPSOFREMINDERSINSECTIONSASDATA FROM ZREMCDBASELIST WHERE Z_PK = ?", .integer(row.key)
     ).first
-    return StoredMemberships(data: columns?[0].string, checksum: columns?[1].string, tokenMap: columns?[2].string)
+    return StoredMemberships(data: columns?.first?.string)
   }
 
   public func createSection(named name: String, in list: ReminderList) throws(RemindersError) -> Section {
@@ -55,9 +51,7 @@ public struct DatabaseSectionStore: SectionStore {
     throw Self.readOnly
   }
 
-  public func replaceMemberships(
-    of list: ReminderList, with new: StoredMemberships, ifUnchangedFrom old: StoredMemberships
-  ) throws(RemindersError) {
+  public func assign(reminderID: String, to section: Section, in list: ReminderList) throws(RemindersError) {
     throw Self.readOnly
   }
 

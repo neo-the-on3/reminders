@@ -1,15 +1,10 @@
 import Foundation
 
-/// Sections: the commands, and the one place membership data is edited.
+/// Sections: the commands.
 ///
-/// Every membership change reads the stored data, edits it with ``SectionMemberships`` (which keeps unknown
-/// fields and formatting), records the change in the list's ``ResolutionTokenMap`` so iCloud sync pushes it,
-/// recomputes the checksum, and writes all three back with a compare-and-swap. When Reminders changed the data in
-/// between, the edit starts again from the new data.
+/// Changes go through the section store, which on a Mac hands them to Reminders itself (ReminderKit). Nothing here
+/// writes membership data, its checksum or the sync bookkeeping: Reminders does, the way the app does.
 extension RemindersService {
-  /// How many times a membership edit is retried when Reminders changes the data underneath it.
-  static let membershipAttempts = 3
-
   // MARK: Commands
 
   /// `reminders sections <list>`: the list's sections, with how many incomplete reminders each holds.
@@ -60,9 +55,9 @@ extension RemindersService {
   {
     let (list, reminder) = try await find(reference)
     let section = try await sectionStore.sections(in: list).resolve(name)
-    let moved = try await editMemberships(of: list) {
-      $0.assign(Self.memberID(reminder.id), to: section.id, at: clock.now)
-    }
+    let current = try? await sectionLayout(of: list).sectionID(of: reminder)
+    let moved = current != section.id
+    if moved { try await sectionStore.assign(reminderID: Self.memberID(reminder.id), to: section, in: list) }
     return Confirmation(
       moved
         ? "Moved \"\(reminder.title)\" to section \"\(section.displayName)\" in \"\(list.title)\""
@@ -76,35 +71,6 @@ extension RemindersService {
     let sections = try await sectionStore.sections(in: list)
     let memberships = try SectionMemberships(storedData: try await sectionStore.memberships(of: list).data)
     return SectionLayout(sections: sections, memberships: memberships)
-  }
-
-  /// Applies `edit` to the list's memberships and writes the result with a fresh checksum and token map. Returns
-  /// false, writing nothing, when `edit` changed nothing.
-  @discardableResult
-  func editMemberships(of list: ReminderList, _ edit: (inout SectionMemberships) -> Bool)
-    async throws(RemindersError) -> Bool
-  {
-    for _ in 0..<Self.membershipAttempts {
-      let stored = try await sectionStore.memberships(of: list)
-      guard !SectionMemberships.isCorrupt(stored) else {
-        throw RemindersError(
-          .storeFailure, "The section data of \"\(list.title)\" doesn't match its checksum, so it was left alone",
-          suggestion: "Open \"\(list.title)\" in the Reminders app, then try again")
-      }
-      var memberships = try SectionMemberships(storedData: stored.data)
-      guard edit(&memberships) else { return false }
-      var tokens = ResolutionTokenMap(storedData: stored.tokenMap)
-      tokens.recordMembershipChange(at: clock.now, newReplicaID: UUID().uuidString)
-      let replacement = StoredMemberships(
-        data: memberships.storedData, checksum: memberships.checksum, tokenMap: tokens.storedData)
-      do {
-        try await sectionStore.replaceMemberships(of: list, with: replacement, ifUnchangedFrom: stored)
-        return true
-      } catch  where error.code == .storeConflict {
-        continue
-      }
-    }
-    throw .membershipConflict
   }
 
   /// A reminder's identifier as membership data spells it: an upper-case UUID.

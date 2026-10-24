@@ -165,11 +165,14 @@ reminders setup-cursor                    # Cursor, every project (--project <di
 - **`--dry-run`** shows the change (the new file, or the `claude` commands) without making it; **`--remove`**
   takes the server out again (a different one only with `--force`); **`--json`** reports what happened as
   `{"outcome": "added" | "replaced" | "unchanged" | "removed" | "absent" | "manual", "configPath", "fileDeleted",
-  "backupPath", …}`.
+  "fileKeptForSymlink", "backupPath", …}`.
 - **Removing the last thing.** When `--remove` leaves a file holding only an empty `mcpServers`, the file is
-  deleted (backed up first, like any change; its folder stays) and reported with `"fileDeleted": true`. A file
-  with other servers or other keys keeps them and an empty `mcpServers`, since there's no telling whether setup
-  added it. A config reached through a symlink is never deleted, so the link isn't left dangling.
+  deleted (backed up first, like any change; its folder stays) and reported with `"fileDeleted": true`. Other
+  servers and other keys stay; an `mcpServers` left empty beside other keys is removed, so a file setup added it
+  to reads as before. A config reached through a symlink is never deleted, so the link isn't left dangling: it
+  stays as `{"mcpServers": {}}`, and the output says so (`"fileKeptForSymlink": true`). Writing through a symlink
+  whose target doesn't exist yet creates the target, with the usual permissions for a new file (0644 under the
+  common umask), and keeps the link.
 - Each command ends with the next step (restart Claude Desktop, start a new Claude Code session, restart Cursor)
   and a note on the Reminders permission prompt for that app: Claude Desktop's names `reminders`, Cursor's names
   Cursor, and Claude Code's names the app it runs in (see **Permission** below). `setup-claude` and `setup-cursor` take

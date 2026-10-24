@@ -146,7 +146,8 @@ public struct MCPSetup: Sendable {
       ? try document.removing(entry, force: options.force) : try document.adding(entry, force: options.force)
     // A file left with nothing but an empty `mcpServers` is deleted (after a backup, like any change), unless it's
     // reached through a symlink, which would be left dangling.
-    let deletes = edit.leavesNothing && !ConfigFile.isSymbolicLink(given)
+    let symlinked = ConfigFile.isSymbolicLink(given)
+    let deletes = edit.leavesNothing && !symlinked
     var backup: String?
     if !options.dryRun {
       if deletes {
@@ -160,6 +161,7 @@ public struct MCPSetup: Sendable {
       server: entry, preview: options.dryRun && !deletes ? edit.text : nil,
       nextSteps: client.nextSteps(after: edit.outcome))
     report.fileDeleted = deletes
+    report.fileKeptForSymlink = edit.leavesNothing && symlinked
     return report
   }
 
@@ -261,6 +263,9 @@ public struct SetupReport: ConsoleRepresentable {
   public var nextSteps: [String]
   /// Whether the config file was deleted (or with `--dry-run` would be) because nothing else was left in it.
   public var fileDeleted = false
+  /// Whether the config was left as an empty shell, rather than deleted, because it's reached through a symlink
+  /// that deleting it would leave dangling.
+  public var fileKeptForSymlink = false
   /// Whether this was `--remove`; it tells apart the two kinds of `manual` outcome.
   var removing = false
   /// About the Reminders permission prompt, once the server is registered.
@@ -270,7 +275,8 @@ public struct SetupReport: ConsoleRepresentable {
   }
 
   private enum CodingKeys: String, CodingKey {
-    case client, outcome, dryRun, configPath, fileDeleted, backupPath, server, commands, preview, nextSteps, note
+    case client, outcome, dryRun, configPath, fileDeleted, fileKeptForSymlink, backupPath, server, commands, preview,
+      nextSteps, note
   }
 
   public func encode(to encoder: any Encoder) throws {
@@ -280,6 +286,7 @@ public struct SetupReport: ConsoleRepresentable {
     try container.encode(dryRun, forKey: .dryRun)
     try container.encodeIfPresent(configPath, forKey: .configPath)
     try container.encode(fileDeleted, forKey: .fileDeleted)
+    try container.encode(fileKeptForSymlink, forKey: .fileKeptForSymlink)
     try container.encodeIfPresent(backupPath, forKey: .backupPath)
     try container.encode(server, forKey: .server)
     try container.encodeIfPresent(commands, forKey: .commands)
@@ -335,6 +342,12 @@ public struct SetupReport: ConsoleRepresentable {
     if let configPath {
       let deleted = fileDeleted ? (dryRun ? " (would be deleted)" : " (deleted)") : ""
       text += style("  Config: \(configPath)\(deleted)\n", .dim)
+      if fileKeptForSymlink {
+        text += style(
+          "  It held nothing else, but it's reached through a symlink, so it "
+            + (dryRun ? "would be" : "was") + " left as an empty config rather than deleted (deleting it would leave "
+            + "the link dangling)\n", .dim)
+      }
     }
     if let backupPath { text += style("  Backup: \(backupPath)\n", .dim) }
     text += style("  Server: \(([server.command] + server.args).map(Self.shellQuoted).joined(separator: " "))\n", .dim)

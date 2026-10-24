@@ -114,6 +114,28 @@ struct ConfigFileTests {
     #expect(directory.contents("dotfiles/mcp.json") == "{\"a\": 1}\n")
   }
 
+  @Test("writing through a dangling symlink creates its target with the usual permissions and keeps the link")
+  func danglingSymlink() throws {
+    let directory = try TemporaryDirectory()
+    let link = directory.file("mcp.json")
+    try FileManager.default.createSymbolicLink(atPath: link, withDestinationPath: "dotfiles/mcp.json")
+    try ConfigFile.write("{}\n", to: link)
+    #expect(ConfigFile.isSymbolicLink(link))
+    #expect(directory.contents("dotfiles/mcp.json") == "{}\n")
+    let mode = try FileManager.default.attributesOfItem(atPath: directory.file("dotfiles/mcp.json"))[.posixPermissions]
+    #expect((mode as? Int) == ConfigFile.newFilePermissions())
+    #expect(ConfigFile.newFilePermissions() & 0o111 == 0)
+    #expect(PhysicalPath.of(link) == directory.file("dotfiles/mcp.json"))
+  }
+
+  @Test("a symlink loop resolves to a path rather than hanging")
+  func symlinkLoop() throws {
+    let directory = try TemporaryDirectory()
+    try FileManager.default.createSymbolicLink(atPath: directory.file("a"), withDestinationPath: "b")
+    try FileManager.default.createSymbolicLink(atPath: directory.file("b"), withDestinationPath: "a")
+    #expect(!PhysicalPath.of(directory.file("a")).isEmpty)
+  }
+
   @Test("a file that isn't UTF-8 is refused")
   func notText() throws {
     let directory = try TemporaryDirectory()

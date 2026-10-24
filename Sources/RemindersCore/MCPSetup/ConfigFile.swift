@@ -37,7 +37,10 @@ public enum ConfigFile {
         backup = path
       }
       try Data(text.utf8).write(to: url, options: .atomic)
-      if let permissions { try manager.setAttributes([.posixPermissions: permissions], ofItemAtPath: url.path) }
+      // A new file gets the usual permissions for this user (0644 under the common umask), whatever the atomic
+      // write's temporary file had.
+      try manager.setAttributes(
+        [.posixPermissions: permissions ?? Self.newFilePermissions()], ofItemAtPath: url.path)
       return backup
     } catch {
       throw RemindersError(
@@ -62,6 +65,13 @@ public enum ConfigFile {
         .setupFailed, "Cannot delete \(path): \(error.localizedDescription)",
         suggestion: "Check that the folder is writable")
     }
+  }
+
+  /// 0666 less the process's umask: what `open(2)` would give a new file.
+  static func newFilePermissions() -> Int {
+    let mask = umask(0o022)
+    umask(mask)
+    return 0o666 & ~Int(mask)
   }
 
   /// Whether `path` itself (not what it points at) is a symbolic link.

@@ -126,6 +126,37 @@ struct SectionReadingTests {
     // Without a manual order, the dated Port test 2 comes first within Alpha, and Beta keeps EventKit's 5, 3.
     #expect(try await listing(manualOrder: nil) == [4, 2, 1, 5, 3, 6].map { "Port test \($0)" })
   }
+
+  @Test("in a manually sorted list, reminders with due dates keep the manual order, in text and JSON alike")
+  func manualOrderIgnoresDueDates() async throws {
+    let list = ReminderList(id: "LIST-CLAUDE", title: "claude")
+    // Due dates run against the manual order; "Undated" sits between dated reminders.
+    let dues: [(String, Int?)] = [("March", 3), ("Undated", nil), ("February", 2), ("January", 1)]
+    let reminders = dues.enumerated().map { index, due in
+      Reminder(
+        id: "00000000-0000-4000-9000-00000000010\(index)", title: due.0, listID: list.id, listName: list.title,
+        dueDate: due.1.flatMap { CalendarDay(year: 2026, month: $0, day: 1) })
+    }
+    func listing(manualOrder: [String]?) async throws -> ReminderListing {
+      // EventKit hands them back in another order again.
+      let store = InMemoryReminderStore(lists: [list], reminders: reminders.reversed(), now: { referenceInstant })
+      let sectionStore = InMemorySectionStore(manualOrders: manualOrder.map { [list.id: $0] } ?? [:])
+      let service = RemindersService(store: store, sections: sectionStore, clock: utcClock)
+      return try await service.contents(ofList: "claude")
+    }
+
+    let manual = try await listing(manualOrder: reminders.map(\.id))
+    #expect(manual.reminders.map(\.title) == ["March", "Undated", "February", "January"])
+    let (console, output, _) = makeConsole()
+    console.show(manual)
+    let shown = output.text.split(separator: "\n").compactMap { line in
+      dues.map(\.0).first { line.contains($0) }
+    }
+    #expect(shown == ["March", "Undated", "February", "January"])
+
+    // Without a manual order, the same list is sorted by due date, undated last.
+    #expect(try await listing(manualOrder: nil).reminders.map(\.title) == ["January", "February", "March", "Undated"])
+  }
 }
 
 @Suite("Sections: changes")

@@ -62,7 +62,7 @@
 
       let created = try await service.createSection(named: name, inList: title)
       let id = try #require(created.id)
-      #expect(try RuntimeReminderKit().sections(in: throwaway.list).contains { $0.id == id })
+      #expect(try RuntimeReminderKit().sections(in: throwaway.list).sections.contains { $0.id == id })
       #expect(
         try await ThrowawayList.eventually {
           try await service.sections(ofList: title).sections.contains { $0.id == id && $0.displayName == name }
@@ -70,7 +70,7 @@
       #expect(try await service.createSection(named: name, inList: title).id == id)
 
       _ = try await service.deleteSection(named: name, inList: title)
-      #expect(try !RuntimeReminderKit().sections(in: throwaway.list).contains { $0.id == id })
+      #expect(try !RuntimeReminderKit().sections(in: throwaway.list).sections.contains { $0.id == id })
       #expect(try await ThrowawayList.eventually { try await service.sections(ofList: title).sections.isEmpty })
     }
   }

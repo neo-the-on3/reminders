@@ -1,3 +1,4 @@
+import Foundation
 import RemindersCore
 
 /// The platform's Reminders store and machine facts: EventKit on macOS, ``UnsupportedPlatformStore`` elsewhere.
@@ -18,14 +19,25 @@ public enum RemindersPlatform {
     #endif
   }
 
-  /// Sections: read from the Reminders database and changed through ReminderKit. Off macOS there's neither, so it
-  /// reports what's missing.
-  public static func makeSectionStore(system: any SystemProbe, permissions: PermissionGuidance) -> any SectionStore {
+  /// Set to `1` to print, on standard error, where each section read came from and each ReminderKit write step.
+  public static let debugVariable = "REMINDERS_DEBUG"
+
+  /// Writes a diagnostic line to standard error, never standard output, so `--json` output stays clean.
+  @Sendable static func debugToStandardError(_ line: String) {
+    FileHandle.standardError.write(Data("reminders debug: \(line)\n".utf8))
+  }
+
+  /// Sections, read and changed through ReminderKit only (nothing reads Reminders' database, so no Full Disk Access
+  /// is needed). Off macOS there's no ReminderKit, so it reports what's missing.
+  public static func makeSectionStore(
+    system: any SystemProbe, permissions: PermissionGuidance,
+    environment: [String: String] = ProcessInfo.processInfo.environment
+  ) -> any SectionStore {
     #if os(macOS)
-      AppleSectionStore(
-        database: DatabaseSectionStore(system: system, permissions: permissions), reminderKit: RuntimeReminderKit())
+      let debug: ReminderKitDiagnostics? = environment[debugVariable] == "1" ? debugToStandardError : nil
+      return AppleSectionStore(reminderKit: RuntimeReminderKit(diagnostics: debug), diagnostics: debug)
     #else
-      NoSectionStore()
+      return NoSectionStore()
     #endif
   }
 

@@ -80,3 +80,60 @@ struct PersistedJSONTests {
     }
   }
 }
+
+@Suite("Section order and membership data from objects")
+struct SectionObjectsTests {
+  @Test("items follow the given identifiers, case-insensitively; the rest keep their order after them")
+  func arranged() {
+    let arranged = SectionOrdering.arranged(["a", "B", "c", "d"], by: ["D", "x", "b"]) { $0 }
+    #expect(arranged == ["d", "B", "a", "c"])
+    #expect(SectionOrdering.arranged(["a", "b"], by: []) { $0 } == ["a", "b"])
+  }
+
+  @Test("stored ordering JSON gives its identifiers in order; anything unreadable gives none")
+  func storedOrdering() {
+    // The Port Test list's ordering as captured on macOS 27.0.1 after Gamma was dragged above Alpha.
+    let captured =
+      #"{"orderedIdentifiers":["EB33B981-786B-420F-8E73-70512A532667","ABCECB2F-5CED-4351-8028-5CE6774B6C9B","#
+      + #""CE743022-A15F-4347-AA00-877C21C65423"],"minimumSupportedVersion":20230430}"#
+    #expect(
+      SectionOrdering.identifiers(Array(captured.utf8)) == [
+        "EB33B981-786B-420F-8E73-70512A532667", "ABCECB2F-5CED-4351-8028-5CE6774B6C9B",
+        "CE743022-A15F-4347-AA00-877C21C65423",
+      ])
+    #expect(SectionOrdering.identifiers(nil).isEmpty)
+    #expect(SectionOrdering.identifiers([]).isEmpty)
+    #expect(SectionOrdering.identifiers(Array("not json".utf8)).isEmpty)
+    #expect(SectionOrdering.identifiers(Array(#"{"orderedIdentifiers":"Gamma"}"#.utf8)).isEmpty)
+  }
+
+  @Test("memberships handed over as objects become data in Reminders' format that reads back the same")
+  func encoded() throws {
+    let entries: [SectionMemberships.Entry] = [
+      .init(reminderID: "M1", sectionID: "G1", modifiedOn: 783_456_789.5), .init(reminderID: "M2", sectionID: "G2"),
+    ]
+    let stored = StoredMemberships(entries: entries)
+    #expect(
+      stored.data
+        == #"{"memberships":[{"groupID":"G1","memberID":"M1","modifiedOn":783456789.5},{"groupID":"G2","memberID":"M2"}],"minimumSupportedVersion":20230430}"#
+    )
+    #expect(try SectionMemberships(storedData: stored.data).entries == entries)
+  }
+}
+
+@Suite("Current memberships")
+struct CurrentMembershipsTests {
+  @Test("one entry per reminder, the newest, in the order reminders first appear")
+  func current() {
+    let memberships = SectionMemberships(entries: [
+      .init(reminderID: "M1", sectionID: "G1", modifiedOn: 5), .init(reminderID: "M2", sectionID: "G1", modifiedOn: 5),
+      .init(reminderID: "M1", sectionID: "G2", modifiedOn: 9), .init(reminderID: "M2", sectionID: "G3", modifiedOn: 1),
+    ])
+    #expect(
+      memberships.current == [
+        .init(reminderID: "M1", sectionID: "G2", modifiedOn: 9),
+        .init(reminderID: "M2", sectionID: "G1", modifiedOn: 5),
+      ])
+    #expect(memberships.sectionsByReminder == ["M1": "G2", "M2": "G1"])
+  }
+}

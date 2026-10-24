@@ -6,7 +6,7 @@
   @testable import RemindersCore
 
   /// Whether to touch the real Reminders: only with `REMINDERS_INTEGRATION=1`, on a Mac where the test runner has
-  /// Reminders access and Full Disk Access.
+  /// Reminders access.
   let integrationEnabled = ProcessInfo.processInfo.environment["REMINDERS_INTEGRATION"] == "1"
 
   /// A throwaway list, `_reminders_test_<random>`, created for one test and deleted by identifier afterwards, so
@@ -28,7 +28,7 @@
       try? await store.deleteList(id: list.id)
     }
 
-    /// Polls `condition` for up to ten seconds: Reminders saves to its database a moment after a change.
+    /// Polls `condition` for up to ten seconds: Reminders stores a change a moment after it.
     static func eventually(_ condition: () async throws -> Bool) async throws -> Bool {
       for _ in 0..<20 {
         if try await condition() { return true }
@@ -42,7 +42,7 @@
     "ReminderKit against this Mac's Reminders (REMINDERS_INTEGRATION=1)", .serialized,
     .enabled(if: integrationEnabled))
   struct ReminderKitIntegrationTests {
-    @Test("a section is created and deleted in a throwaway list, as ReminderKit and the database see it")
+    @Test("a section is created and deleted in a throwaway list, as ReminderKit sees it")
     func createAndDelete() async throws {
       let throwaway = try await ThrowawayList.make()
       do {
@@ -62,7 +62,7 @@
 
       let created = try await service.createSection(named: name, inList: title)
       let id = try #require(created.id)
-      #expect(try RuntimeReminderKit().sections(in: throwaway.list).contains { $0.id == id })
+      #expect(try RuntimeReminderKit().sections(in: throwaway.list).sections.contains { $0.id == id })
       #expect(
         try await ThrowawayList.eventually {
           try await service.sections(ofList: title).sections.contains { $0.id == id && $0.displayName == name }
@@ -70,7 +70,7 @@
       #expect(try await service.createSection(named: name, inList: title).id == id)
 
       _ = try await service.deleteSection(named: name, inList: title)
-      #expect(try !RuntimeReminderKit().sections(in: throwaway.list).contains { $0.id == id })
+      #expect(try !RuntimeReminderKit().sections(in: throwaway.list).sections.contains { $0.id == id })
       #expect(try await ThrowawayList.eventually { try await service.sections(ofList: title).sections.isEmpty })
     }
   }

@@ -22,11 +22,9 @@ let package = Package(
     // Domain model, the store protocol, commands as a service, parsing, matching, presentation and section-sync
     // bookkeeping. Foundation only.
     .target(name: "RemindersCore"),
-    // The platform: EventKit, the Reminders database (for sections) and the Mac's system facts. Compiles everywhere; off macOS the store reports
-    // UNSUPPORTED_PLATFORM.
-    .target(name: "RemindersApple", dependencies: ["RemindersCore", "CSQLite"]),
-    // The system SQLite, which sections are read with: the macOS SDK's, or libsqlite3-dev on Linux.
-    .systemLibrary(name: "CSQLite", providers: [.apt(["libsqlite3-dev"])]),
+    // The platform: EventKit, ReminderKit (for sections) and the Mac's system facts. Compiles everywhere; off macOS
+    // the store reports UNSUPPORTED_PLATFORM.
+    .target(name: "RemindersApple", dependencies: ["RemindersCore"]),
     // `reminders --mcp`: the commands as MCP tools, on the official MCP Swift SDK.
     .target(
       name: "RemindersMCP",
@@ -63,8 +61,8 @@ let package = Package(
       dependencies: ["RemindersMCP", "RemindersCore", .product(name: "MCP", package: "swift-sdk")]
     ),
     .testTarget(name: "RemindersCLITests", dependencies: ["RemindersCLI", "RemindersCore"]),
-    // The SQLite section reader against databases built in the tests; runs on Linux too.
-    .testTarget(name: "RemindersAppleTests", dependencies: ["RemindersApple", "RemindersCore", "CSQLite"]),
+    // The ReminderKit section store against a fake bridge; runs on Linux too.
+    .testTarget(name: "RemindersAppleTests", dependencies: ["RemindersApple", "RemindersCore"]),
     // Opt-in (REMINDERS_INTEGRATION=1): drives the built binary against Apple Reminders in a throwaway list.
     .testTarget(name: "RemindersIntegrationTests", dependencies: ["RemindersCLI", "RemindersApple", "RemindersCore"]),
   ],

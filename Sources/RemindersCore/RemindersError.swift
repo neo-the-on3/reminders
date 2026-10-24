@@ -16,6 +16,8 @@ public struct RemindersError: Error, Hashable, Sendable, Codable, CustomStringCo
     case checksFailed = "CHECKS_FAILED"
     /// The Reminders store refused an operation (a failed save or removal).
     case storeFailure = "STORE_FAILURE"
+    /// A change was saved without an error, but reading back shows it didn't take effect.
+    case writeNotApplied = "WRITE_NOT_APPLIED"
     /// Reminders changed the data while it was being edited, again after retrying.
     case storeConflict = "STORE_CONFLICT"
     /// Apple Reminders isn't available on this platform (any OS other than macOS).
@@ -45,6 +47,14 @@ public struct RemindersError: Error, Hashable, Sendable, Codable, CustomStringCo
 }
 
 extension RemindersError {
+  /// A change that saved without an error but isn't there when read back.
+  public static func writeNotApplied(_ change: String) -> RemindersError {
+    RemindersError(
+      .writeNotApplied, "Reminders accepted the change but didn't apply it: \(change)",
+      suggestion:
+        "Nothing was changed. Run again with REMINDERS_DEBUG=1 and report the output at \(ProductInfo.homepage)/issues")
+  }
+
   /// A command or option that exists in the CLI but isn't implemented yet.
   public static func notImplemented(_ feature: String) -> RemindersError {
     RemindersError(

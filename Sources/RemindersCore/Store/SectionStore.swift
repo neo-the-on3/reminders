@@ -1,7 +1,7 @@
 /// Where a list's sections, and which reminder is in which section, are kept.
 ///
 /// EventKit has no sections. Reminders keeps the sections as their own records, and the memberships as JSON on the
-/// list (see ``SectionMemberships``). Changes go through Reminders itself, never by writing its data directly, so
+/// list (see ``SectionMemberships``). Reads and changes go through Reminders itself, never its data directly, so
 /// Reminders keeps the membership data, its checksum and iCloud sync consistent.
 public protocol SectionStore: Sendable {
   /// The list's sections, in display order.
@@ -9,16 +9,18 @@ public protocol SectionStore: Sendable {
   func createSection(named name: String, in list: ReminderList) async throws(RemindersError) -> Section
   func deleteSection(_ section: Section, in list: ReminderList) async throws(RemindersError)
 
-  /// The list's membership data as stored.
-  func memberships(of list: ReminderList) async throws(RemindersError) -> StoredMemberships
+  /// Which section each of `reminderIDs` (upper-case dashed UUIDs) is in, in Reminders' membership format.
+  /// Reminders in no section may be left out.
+  func memberships(of list: ReminderList, reminderIDs: [String]) async throws(RemindersError) -> StoredMemberships
   /// Puts a reminder in one of the list's sections, taking it out of any other.
   /// - Parameter reminderID: The reminder's identifier as an upper-case dashed UUID.
   func assign(reminderID: String, to section: Section, in list: ReminderList) async throws(RemindersError)
 }
 
-/// A list's section-membership data exactly as Reminders stores it. Nil when the list has none (NULL).
+/// Section memberships in Reminders' own format: the JSON it keeps on a list and syncs through iCloud
+/// (`MembershipsOfRemindersInSectionsAsData`). Nil when there are none.
 public struct StoredMemberships: Hashable, Sendable {
-  /// The memberships JSON (`ZMEMBERSHIPSOFREMINDERSINSECTIONSASDATA`).
+  /// The memberships JSON.
   public var data: String?
 
   public init(data: String? = nil) {
@@ -39,7 +41,7 @@ public struct NoSectionStore: SectionStore {
   public func deleteSection(_ section: Section, in list: ReminderList) throws(RemindersError) {
     throw Self.unavailable
   }
-  public func memberships(of list: ReminderList) throws(RemindersError) -> StoredMemberships {
+  public func memberships(of list: ReminderList, reminderIDs: [String]) throws(RemindersError) -> StoredMemberships {
     throw Self.unavailable
   }
   public func assign(reminderID: String, to section: Section, in list: ReminderList) throws(RemindersError) {

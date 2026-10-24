@@ -1,7 +1,6 @@
 import Foundation
 
-/// Which reminder is in which section of a list, as Reminders stores it (the list's
-/// `ZMEMBERSHIPSOFREMINDERSINSECTIONSASDATA` JSON).
+/// Which reminder is in which section of a list, in Reminders' membership format (see ``StoredMemberships``).
 ///
 /// Read-only: memberships only ever change through Reminders itself (see ``SectionStore/assign(reminderID:to:in:)``),
 /// which keeps the data, its checksum and iCloud sync consistent.
@@ -55,12 +54,44 @@ public struct SectionMemberships: Sendable, Equatable {
   /// Each reminder's section. When a reminder is listed more than once, the entry modified last counts, as in
   /// Reminders' own merge; between entries with the same or no time, the later one in the data.
   public var sectionsByReminder: [String: String] {
+    Dictionary(current.map { ($0.reminderID, $0.sectionID) }, uniquingKeysWith: { _, last in last })
+  }
+
+  /// The entry that counts for each reminder (see ``sectionsByReminder``), in the order reminders first appear.
+  public var current: [Entry] {
     var newest: [String: Entry] = [:]
-    for entry in entries where (newest[entry.reminderID]?.modifiedOn ?? -.infinity) <= (entry.modifiedOn ?? -.infinity)
-    {
-      newest[entry.reminderID] = entry
+    var order: [String] = []
+    for entry in entries {
+      guard let previous = newest[entry.reminderID] else {
+        newest[entry.reminderID] = entry
+        order.append(entry.reminderID)
+        continue
+      }
+      if (previous.modifiedOn ?? -.infinity) <= (entry.modifiedOn ?? -.infinity) { newest[entry.reminderID] = entry }
     }
-    return newest.mapValues(\.sectionID)
+    return order.compactMap { newest[$0] }
+  }
+}
+
+extension StoredMemberships {
+  /// Membership data in Reminders' format holding `entries`, for sources that hand memberships over as objects
+  /// rather than as the stored JSON.
+  public init(entries: [SectionMemberships.Entry]) {
+    struct Membership: Encodable {
+      var memberID: String
+      var groupID: String
+      var modifiedOn: Double?
+    }
+    struct Document: Encodable {
+      var minimumSupportedVersion = 20_230_430
+      var memberships: [Membership]
+    }
+    let document = Document(
+      memberships: entries.map { Membership(memberID: $0.reminderID, groupID: $0.sectionID, modifiedOn: $0.modifiedOn) }
+    )
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.sortedKeys]
+    self.init(data: (try? encoder.encode(document)).flatMap { String(data: $0, encoding: .utf8) })
   }
 }
 

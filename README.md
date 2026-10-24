@@ -47,7 +47,7 @@ macOS 26 or later and runs natively on Apple silicon and Intel (a universal bina
 - The binary is **ad-hoc signed, not notarized**. Homebrew doesn't quarantine what it downloads, so macOS runs it
   without a Gatekeeper prompt. A copy downloaded by a browser may be blocked; remove the quarantine flag with
   `xattr -d com.apple.quarantine reminders`.
-- The **first run asks for Reminders access**. Run under an MCP client such as Claude Desktop, the prompt and
+- The **first run asks for Reminders access**. Run under an MCP client such as Claude, the prompt and
   the System Settings entry say `reminders`. Run from Terminal, they name the terminal app (see
   [Reminders permission](#reminders-permission)). `reminders authorize` triggers the prompt on purpose.
 - To use it from an MCP client, run `reminders setup-claude`, `reminders setup-claude-code` or
@@ -77,7 +77,7 @@ Without `--version`, builds report the development version, `0.1.0-dev`.
 
 macOS grants Reminders access to the process responsible for `reminders`. From Terminal, iTerm or Cursor
 that's the app, so the prompt names it and the permission is shared by everything you run there. An app that
-doesn't take responsibility for what it starts, such as Claude Desktop for its MCP servers, leaves `reminders`
+doesn't take responsibility for what it starts, such as Claude for its MCP servers, leaves `reminders`
 responsible for itself: the prompt then names `reminders`, and it appears under that name in System Settings.
 `reminders authorize` triggers the prompt and opens System Settings for anything still missing;
 `reminders doctor` checks everything without prompting. Any other command asks the first time too. Both name
@@ -91,10 +91,10 @@ Full Access), then restart that app, or just run `reminders` again. `doctor`, `a
 `PERMISSION_DENIED` error say which of these states applies.
 
 Under an MCP client the error leads with a command to run, since a model relaying it repeats a command where it
-would paraphrase prose. Under Claude Desktop, which leaves the server its own `"reminders"` entry, that's
+would paraphrase prose. Under Claude, which leaves the server its own `"reminders"` entry, that's
 `reminders authorize --for-mcp` in Terminal: it handles Terminal's own access as usual, then opens the Reminders
 page to turn on `"reminders"`. Under Cursor, which holds access for its servers, it's `reminders authorize` in a
-terminal inside Cursor. Either way the error ends with quitting and reopening the client (the app that started the
+Cursor's built-in terminal. Either way the error ends with quitting and reopening the client (the app that started the
 server): macOS reads the permission when a process starts, so the change takes effect once the client starts the
 server again.
 
@@ -148,7 +148,7 @@ because desktop apps don't see your shell's `PATH`.
 These commands register a server named `reminders` that runs this binary with `--mcp`:
 
 ```sh
-reminders setup-claude                    # Claude Desktop
+reminders setup-claude                    # Claude (the desktop app)
 reminders setup-claude-code               # Claude Code, user scope (--scope local|project for this directory)
 reminders setup-cursor                    # Cursor, every project (--project <dir> for one project)
 ```
@@ -156,7 +156,7 @@ reminders setup-cursor                    # Cursor, every project (--project <di
 - **Path.** The command is the running binary's absolute path with symlinks resolved. For a Homebrew install,
   which lives in a versioned `Cellar` directory that upgrades delete, it's
   `$(brew --prefix)/opt/reminders/bin/reminders` instead (or `$(brew --prefix)/bin/reminders`).
-- **Merging.** Claude Desktop's `~/Library/Application Support/Claude/claude_desktop_config.json` and Cursor's
+- **Merging.** Claude's `~/Library/Application Support/Claude/claude_desktop_config.json` and Cursor's
   `~/.cursor/mcp.json` (or `<dir>/.cursor/mcp.json`) are edited in place. Only the `reminders` entry's text
   changes: everything else (other servers and settings, their order, spacing, one-line objects, line endings) is
   kept byte for byte, so `--remove` after adding gives back the original file. A new entry is laid out like its
@@ -182,14 +182,14 @@ reminders setup-cursor                    # Cursor, every project (--project <di
   stays as `{"mcpServers": {}}`, and the output says so (`"fileKeptForSymlink": true`). Writing through a symlink
   whose target doesn't exist yet creates the target, with the usual permissions for a new file (0644 under the
   common umask), and keeps the link.
-- Each command ends with the next step (restart Claude Desktop, start a new Claude Code session, restart Cursor)
-  and a note on the Reminders permission prompt for that app: Claude Desktop's names `reminders`, Cursor's names
+- Each command ends with the next step (restart Claude, start a new Claude Code session, restart Cursor)
+  and a note on the Reminders permission prompt for that app: Claude's names `reminders`, Cursor's names
   Cursor, and Claude Code's names the app it runs in (see **Permission** below). `setup-claude` and `setup-cursor` take
   `--config <file>` to edit another file, for testing.
 
 ### Configuring a client by hand
 
-**Claude Desktop**: edit `~/Library/Application Support/Claude/claude_desktop_config.json` (Settings ›
+**Claude**: edit `~/Library/Application Support/Claude/claude_desktop_config.json` (Settings ›
 Developer › Edit Config), then restart Claude:
 
 ```json
@@ -218,7 +218,7 @@ npx @modelcontextprotocol/inspector "$(scripts/build-release.sh)" --mcp
 scripts/mcp-session.sh .build/release/reminders reminders_lists '{}' reminders_today '{}'
 ```
 
-**Permission.** macOS assigns Reminders access to the server's responsible process. Claude Desktop leaves that
+**Permission.** macOS assigns Reminders access to the server's responsible process. Claude leaves that
 to the server, so the prompt names `reminders` itself; clients that take responsibility get the prompt in their
 own name: Cursor, or for Claude Code the terminal app it runs in. If tools report `PERMISSION_DENIED`, the error names
 whichever it is: allow it under System Settings › Privacy & Security › Reminders, then restart the client. A
@@ -374,7 +374,7 @@ tool. Intentional differences:
   report `UNSUPPORTED_PLATFORM`.
 - **Permissions.** `doctor` never shows the permission prompt. It reports each access state separately (not
   requested yet, denied, restricted, write-only, granted) and names what holds the permission (an app, or
-  `reminders` itself when it is its own responsible process, as under Claude Desktop); only "not requested yet"
+  `reminders` itself when it is its own responsible process, as under Claude); only "not requested yet"
   points to `authorize`. Write-only access is not enough. A `Permissions app` check shows what macOS asks about
   (`reminders (this tool)` in that case). The original always named the launching app.
 - **`doctor` and `authorize` exit 1 on failure, with or without `--json`.** `doctor` fails when any check fails;

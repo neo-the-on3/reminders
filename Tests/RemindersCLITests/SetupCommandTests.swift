@@ -61,14 +61,15 @@ private struct DatabaseFreeProbe: SystemProbe {
 
 @Suite("Setup commands")
 struct SetupCommandTests {
-  @Test("setup-claude writes Claude Desktop's config under the home directory, then reports it unchanged")
+  @Test("setup-claude writes Claude's config under the home directory, then reports it unchanged")
   func claude() async throws {
     let home = try FakeHome()
     defer { home.remove() }
     let (status, output, _) = try await run(["setup-claude"], in: home)
     #expect(status == 0)
-    #expect(output.hasPrefix("✓ Added the reminders server to Claude Desktop\n"))
-    #expect(output.contains("Next: Quit Claude Desktop"))
+    #expect(output.hasPrefix("✓ Added the reminders server to Claude\n"))
+    #expect(output.contains("Next: Quit Claude completely"))
+    #expect(!output.contains("Claude Desktop"))
     let config = try #require(home.read("Library/Application Support/Claude/claude_desktop_config.json"))
     #expect(config.contains(#""args": ["--mcp"]"#))
     let (_, again, _) = try await run(["setup-claude", "--json"], in: home)

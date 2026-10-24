@@ -8,7 +8,7 @@ public enum MCPClient: String, Sendable, Encodable {
 
   public var displayName: String {
     switch self {
-    case .claudeDesktop: "Claude Desktop"
+    case .claudeDesktop: "Claude"
     case .claudeCode: "Claude Code"
     case .cursor: "Cursor"
     }
@@ -20,7 +20,7 @@ public enum MCPClient: String, Sendable, Encodable {
     case .added, .replaced:
       var steps: [String]
       switch self {
-      case .claudeDesktop: steps = ["Quit Claude Desktop completely and open it again to load the server."]
+      case .claudeDesktop: steps = ["Quit Claude completely and open it again to load the server."]
       case .claudeCode:
         steps = [
           "Start a new Claude Code session (or run /mcp) to use it; `claude mcp get reminders` shows its status."
@@ -43,9 +43,9 @@ public enum MCPClient: String, Sendable, Encodable {
     let settings = "System Settings › Privacy & Security › Reminders"
     switch self {
     case .claudeDesktop:
-      return "On first use macOS asks whether `reminders` may access Reminders: Claude Desktop leaves its servers "
+      return "On first use macOS asks whether `reminders` may access Reminders: Claude leaves its servers "
         + "responsible for themselves, so the prompt and the \(settings) entry name `reminders`. If tools report "
-        + "PERMISSION_DENIED, turn `reminders` on there (Full Access), then restart Claude Desktop."
+        + "PERMISSION_DENIED, turn `reminders` on there (Full Access), then restart Claude."
     case .cursor:
       return "On first use macOS asks whether Cursor may access Reminders: Cursor is responsible for the servers it "
         + "starts, so the prompt and the \(settings) entry name Cursor, and the access is shared with everything "
@@ -122,7 +122,7 @@ public struct MCPSetup: Sendable {
     self.environment = environment
   }
 
-  /// Claude Desktop's config on macOS.
+  /// Claude's config on macOS.
   public static func claudeDesktopConfig(home: String) -> String {
     "\(home)/Library/Application Support/Claude/claude_desktop_config.json"
   }
@@ -132,7 +132,7 @@ public struct MCPSetup: Sendable {
     "\(project ?? home)/.cursor/mcp.json"
   }
 
-  /// Edits the JSON config at `path` for `client` (Claude Desktop or Cursor). The report and any error name the
+  /// Edits the JSON config at `path` for `client` (Claude or Cursor). The report and any error name the
   /// file by its physical path (see ``PhysicalPath``), the form the backup and the server's command take too.
   public func configure(_ client: MCPClient, at path: String, _ options: SetupOptions) throws(RemindersError)
     -> SetupReport

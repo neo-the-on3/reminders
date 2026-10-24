@@ -61,7 +61,7 @@ struct HostApplicationTests {
 
   // MARK: Responsible process
 
-  /// Claude Desktop starting the server through its helper; Terminal starting it through a shell.
+  /// Claude starting the server through its helper; Terminal starting it through a shell.
   private static var claude: (Int32) -> ProcessRecord? {
     tree([
       900: (800, "/usr/local/bin/reminders"),
@@ -88,7 +88,7 @@ struct HostApplicationTests {
       declaresRemindersUsage: { appsDeclaringUsage.contains($0) })
   }
 
-  @Test("when macOS says this process is responsible (Claude Desktop's MCP servers), the tool holds permissions")
+  @Test("when macOS says this process is responsible (Claude's MCP servers), the tool holds permissions")
   func toolIsResponsible() {
     let host = Self.responsible(900, in: Self.claude, responsiblePID: 900)
     #expect(host == .thisTool(at: "/usr/local/bin/reminders"))
@@ -173,13 +173,13 @@ struct HostApplicationTests {
     #expect(guidance.error(for: .denied).message == #"Reminders access not granted (Denied for "Cursor")"#)
     #expect(
       guidance.remedy(for: .denied)
-        == #"Run `reminders authorize` in a terminal inside Cursor, turn on "Cursor" (the MCP client, which holds "#
+        == #"Run `reminders authorize` in Cursor's built-in terminal, turn on "Cursor" (the MCP client, which holds "#
         + "Reminders access for this tool) if System Settings opens, then quit and reopen Cursor so the change takes "
         + "effect")
     let unprompted = guidance.error(for: .notDetermined)
     #expect(unprompted.message.contains(#"macOS didn't show the prompt for "Cursor""#))
     #expect(unprompted.suggestion?.contains("then quit and reopen Cursor so the change takes effect") == true)
-    #expect(unprompted.suggestion?.hasPrefix("Run `reminders authorize` in a terminal inside Cursor") == true)
+    #expect(unprompted.suggestion?.hasPrefix("Run `reminders authorize` in Cursor's built-in terminal") == true)
     #expect(unprompted.suggestion?.contains("from a terminal app") == false)
   }
 }

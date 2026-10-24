@@ -25,15 +25,15 @@ private func absolute(_ path: String, in context: CommandContext) -> String {
 
 struct SetupClaude: ConsoleCommand {
   static let configuration = CommandConfiguration(
-    abstract: "Register the MCP server with Claude Desktop",
+    abstract: "Register the MCP server with Claude",
     discussion: """
-      Adds a "reminders" server to Claude Desktop's config, \
+      Adds a "reminders" server to Claude's config, \
       ~/Library/Application Support/Claude/claude_desktop_config.json, running this binary with --mcp. Other \
       servers and settings are kept, the file is backed up first, and running it again changes nothing.
       """)
   @OptionGroup var globals: GlobalOptions
   @OptionGroup var flags: SetupFlags
-  @Option(help: ArgumentHelp("Edit this file instead of Claude Desktop's config", valueName: "file"))
+  @Option(help: ArgumentHelp("Edit this file instead of Claude's config", valueName: "file"))
   var config: String?
 
   func run(in context: CommandContext) async throws {

@@ -88,10 +88,10 @@ public struct Diagnostics: Sendable {
     }
 
     // Run from a terminal, the checks above were about the terminal app. An MCP client that disclaims its servers
-    // (Claude Desktop) leaves the tool its own entry, which only System Settings can change once it's been asked.
+    // (Claude) leaves the tool its own entry, which only System Settings can change once it's been asked.
     if forMCPServer && !permissions.holderIsThisTool {
       console.narrate(
-        "\nFor MCP clients that leave \(name) its own Reminders access, such as Claude Desktop:\n"
+        "\nFor MCP clients that leave \(name) its own Reminders access, such as Claude:\n"
           + "     macOS keeps a separate \"\(name)\" entry for the server; \(holder)'s access doesn't cover it.\n")
       let toggle = "turn on \"\(name)\" under Reminders, then quit and reopen the MCP client"
       if openedPane {

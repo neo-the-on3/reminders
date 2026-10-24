@@ -3,7 +3,7 @@ import Testing
 
 @testable import RemindersApple
 
-/// A machine where Claude Desktop started this tool and left it holding its own permissions.
+/// A machine where Claude started this tool and left it holding its own permissions.
 private struct ClaudeDesktopLaunch: SystemProbe {
   var operatingSystemVersion: String? { "27.0" }
   var embeddedInfoPlist: [String: String]? { nil }

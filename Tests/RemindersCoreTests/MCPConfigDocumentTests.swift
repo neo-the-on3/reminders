@@ -5,7 +5,7 @@ import Testing
 private let path = "/Users/me/Library/Application Support/Claude/claude_desktop_config.json"
 private let entry = MCPServerEntry(command: "/opt/homebrew/opt/reminders/bin/reminders")
 
-/// A Claude Desktop config with another server and a top-level preference, indented with four spaces.
+/// A Claude config with another server and a top-level preference, indented with four spaces.
 private let existing = """
   {
       "mcpServers": {

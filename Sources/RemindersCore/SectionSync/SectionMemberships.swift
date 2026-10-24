@@ -64,6 +64,28 @@ public struct SectionMemberships: Sendable, Equatable {
   }
 }
 
+extension StoredMemberships {
+  /// Membership data in Reminders' format holding `entries`, for sources that hand memberships over as objects
+  /// rather than as the stored JSON.
+  public init(entries: [SectionMemberships.Entry]) {
+    struct Membership: Encodable {
+      var memberID: String
+      var groupID: String
+      var modifiedOn: Double?
+    }
+    struct Document: Encodable {
+      var minimumSupportedVersion = 20_230_430
+      var memberships: [Membership]
+    }
+    let document = Document(
+      memberships: entries.map { Membership(memberID: $0.reminderID, groupID: $0.sectionID, modifiedOn: $0.modifiedOn) }
+    )
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.sortedKeys]
+    self.init(data: (try? encoder.encode(document)).flatMap { String(data: $0, encoding: .utf8) })
+  }
+}
+
 extension UUID {
   /// A UUID from its 32 hex digits without dashes, as Core Data stores identifiers.
   public init?(compactHex hex: String) {

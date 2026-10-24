@@ -1,3 +1,4 @@
+import Foundation
 import RemindersCore
 
 /// The platform's Reminders store and machine facts: EventKit on macOS, ``UnsupportedPlatformStore`` elsewhere.
@@ -18,12 +19,20 @@ public enum RemindersPlatform {
     #endif
   }
 
-  /// Sections: read from the Reminders database and changed through ReminderKit. Off macOS there's neither, so it
+  /// Set to `1` to read sections from the Reminders database rather than through ReminderKit.
+  public static let sectionsFromDatabaseVariable = "REMINDERS_SECTIONS_FROM_DATABASE"
+
+  /// Sections: changed through ReminderKit, and read through it too, falling back to the Reminders database where it
+  /// can't answer (or always, with ``sectionsFromDatabaseVariable`` set to `1`). Off macOS there's neither, so it
   /// reports what's missing.
-  public static func makeSectionStore(system: any SystemProbe, permissions: PermissionGuidance) -> any SectionStore {
+  public static func makeSectionStore(
+    system: any SystemProbe, permissions: PermissionGuidance,
+    environment: [String: String] = ProcessInfo.processInfo.environment
+  ) -> any SectionStore {
     #if os(macOS)
       AppleSectionStore(
-        database: DatabaseSectionStore(system: system, permissions: permissions), reminderKit: RuntimeReminderKit())
+        database: DatabaseSectionStore(system: system, permissions: permissions), reminderKit: RuntimeReminderKit(),
+        readsThroughReminderKit: environment[sectionsFromDatabaseVariable] != "1")
     #else
       NoSectionStore()
     #endif

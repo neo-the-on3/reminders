@@ -18,6 +18,8 @@ private let groceries = ReminderList(id: listID, title: "Groceries")
 private final class FakeReminderKit: ReminderKitBridge {
   struct State {
     var sections: [ReminderKitSection] = [ReminderKitSection(id: dairyID, displayName: "Dairy")]
+    var memberships: StoredMemberships?
+    var manualOrder: [String]?
     var calls: [String] = []
     var failure: RemindersError?
   }
@@ -28,6 +30,20 @@ private final class FakeReminderKit: ReminderKitBridge {
     try state.withLock { state throws(RemindersError) in
       if let failure = state.failure { throw failure }
       return state.sections
+    }
+  }
+
+  func memberships(in list: ReminderList) throws(RemindersError) -> StoredMemberships? {
+    try state.withLock { state throws(RemindersError) in
+      if let failure = state.failure { throw failure }
+      return state.memberships
+    }
+  }
+
+  func manualReminderOrder(in list: ReminderList) throws(RemindersError) -> [String]? {
+    try state.withLock { state throws(RemindersError) in
+      if let failure = state.failure { throw failure }
+      return state.manualOrder
     }
   }
 
@@ -65,7 +81,7 @@ private struct Setup {
   let service: RemindersService
   let store: AppleSectionStore
 
-  init() throws {
+  init(readsThroughReminderKit: Bool = true) throws {
     builder = try Builder()
     path = try builder.database(
       "local",
@@ -78,7 +94,7 @@ private struct Setup {
       database: DatabaseSectionStore(
         system: DatabaseProbe(files: [path]),
         permissions: PermissionGuidance(host: HostApplication(name: "Terminal", bundlePath: "/Terminal.app"))),
-      reminderKit: reminderKit)
+      reminderKit: reminderKit, readsThroughReminderKit: readsThroughReminderKit)
     service = RemindersService(
       store: InMemoryReminderStore(
         lists: [groceries],
@@ -87,14 +103,49 @@ private struct Setup {
   }
 }
 
-@Suite("Sections: created and deleted through ReminderKit")
+@Suite("Sections through ReminderKit")
 struct AppleSectionStoreTests {
-  @Test("reads come from the database, not ReminderKit")
+  @Test("reads come from ReminderKit, in its order")
   func reads() async throws {
     let setup = try Setup()
+    let produce = ReminderKitSection(id: UUID().uuidString, displayName: "Produce")
+    let fromReminderKit = #"{"memberships":[]}"#
+    setup.reminderKit.state.withLock {
+      $0.sections.insert(produce, at: 0)
+      $0.memberships = StoredMemberships(data: fromReminderKit)
+      $0.manualOrder = [milkID]
+    }
+    let sections = try await setup.store.sections(in: groceries)
+    #expect(sections.map(\.displayName) == ["Produce", "Dairy"])
+    #expect(sections.map(\.sortOrder) == [0, 1])
+    #expect(sections.allSatisfy { $0.listName == "Groceries" })
+    #expect(try await setup.store.memberships(of: groceries).data == fromReminderKit)
+    #expect(await setup.store.manualReminderOrder(of: groceries) == [milkID])
+  }
+
+  @Test("reads fall back to the database when ReminderKit can't answer")
+  func fallback() async throws {
+    let setup = try Setup()
+    setup.reminderKit.state.withLock { $0.sections = [] }
+    // ReminderKit without the memberships: they come from the database.
+    #expect(try await setup.store.memberships(of: groceries).data == storedData)
     setup.reminderKit.state.withLock { $0.failure = .reminderKitUnavailable("test") }
     #expect(try await setup.store.sections(in: groceries).map(\.id) == [dairyID])
     #expect(try await setup.store.memberships(of: groceries).data == storedData)
+    #expect(await setup.store.manualReminderOrder(of: groceries) == nil)
+  }
+
+  @Test("with ReminderKit reads off, everything is read from the database")
+  func databaseOnly() async throws {
+    let setup = try Setup(readsThroughReminderKit: false)
+    setup.reminderKit.state.withLock {
+      $0.sections = []
+      $0.memberships = StoredMemberships(data: "{}")
+      $0.manualOrder = [milkID]
+    }
+    #expect(try await setup.store.sections(in: groceries).map(\.id) == [dairyID])
+    #expect(try await setup.store.memberships(of: groceries).data == storedData)
+    #expect(await setup.store.manualReminderOrder(of: groceries) == nil)
   }
 
   @Test("create-section asks ReminderKit, and reuses a section with exactly that name")
@@ -109,9 +160,9 @@ struct AppleSectionStoreTests {
     #expect(setup.reminderKit.state.withLock(\.calls) == ["create Frozen in Groceries"])
   }
 
-  @Test("a section the database doesn't have yet goes after the ones it has")
+  @Test("a section the store doesn't list yet goes after the ones it has")
   func createdBeforeSaved() async throws {
-    let setup = try Setup()
+    let setup = try Setup(readsThroughReminderKit: false)
     let section = try await setup.store.createSection(named: "Frozen", in: groceries)
     #expect(section.displayName == "Frozen")
     #expect(section.listName == "Groceries")

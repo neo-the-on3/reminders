@@ -1,15 +1,21 @@
 import RemindersCore
 
-/// Section changes through ReminderKit, the private framework the Reminders app itself uses.
+/// Sections through ReminderKit, the private framework the Reminders app itself uses.
 ///
-/// EventKit can't create or delete sections, and writing them into the database directly wouldn't sync, so these
-/// go through ReminderKit, which saves them the way the app does and lets iCloud carry them to other devices. The
+/// EventKit has no sections, and writing them into the database directly wouldn't sync, so changes go through
+/// ReminderKit, which saves them the way the app does and lets iCloud carry them to other devices. Reads go
+/// through it too where it exposes what's needed, so they don't need Full Disk Access. The
 /// framework is private: ``RuntimeReminderKit`` loads it when first needed and checks every class and method it
 /// uses, so a macOS release that changes them fails with ``RemindersError/Code/reminderKitUnavailable`` rather than
 /// crashing. Tests use a fake.
 public protocol ReminderKitBridge: Sendable {
-  /// The list's sections, in ReminderKit's order.
+  /// The list's sections, in the order the user arranged them.
   func sections(in list: ReminderList) throws(RemindersError) -> [ReminderKitSection]
+  /// The list's membership data, or nil when this ReminderKit doesn't expose it.
+  func memberships(in list: ReminderList) throws(RemindersError) -> StoredMemberships?
+  /// The list's reminder identifiers (upper-case dashed UUIDs) in the order the user arranged them, when the list is
+  /// sorted manually; nil when it isn't, or when this ReminderKit doesn't say.
+  func manualReminderOrder(in list: ReminderList) throws(RemindersError) -> [String]?
   /// Creates a section and returns it.
   func createSection(named name: String, in list: ReminderList) throws(RemindersError) -> ReminderKitSection
   /// Deletes the section with identifier `id`.

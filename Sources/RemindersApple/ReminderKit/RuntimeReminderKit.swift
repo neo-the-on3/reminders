@@ -16,7 +16,21 @@
 
     public func sections(in list: ReminderList) throws(RemindersError) -> [ReminderKitSection] {
       try withSession { session throws(RemindersError) in
-        try session.sections(of: session.storage(of: list).list).compactMap(ReminderKitSession.section)
+        let storage = try session.storage(of: list).list
+        let sections = try session.sections(of: storage).compactMap(ReminderKitSession.section)
+        return DatabaseRows.arranged(sections, by: ReminderKitSession.sectionOrder(of: storage), identifier: \.id)
+      }
+    }
+
+    public func memberships(in list: ReminderList) throws(RemindersError) -> StoredMemberships? {
+      try withSession { session throws(RemindersError) in
+        ReminderKitSession.memberships(of: try session.storage(of: list).list)
+      }
+    }
+
+    public func manualReminderOrder(in list: ReminderList) throws(RemindersError) -> [String]? {
+      try withSession { session throws(RemindersError) in
+        ReminderKitSession.manualReminderOrder(of: try session.storage(of: list).list)
       }
     }
 
@@ -94,6 +108,53 @@
     static func section(_ object: NSObject) -> ReminderKitSection? {
       guard let id = Runtime.identifier(of: object) else { return nil }
       return ReminderKitSection(id: id, displayName: Runtime.string(object, "displayName") ?? "")
+    }
+
+    /// The section identifiers in the list's arranged order, from whichever form this ReminderKit exposes: the
+    /// stored JSON or the identifiers themselves. Empty when it exposes neither; the sections then keep the order
+    /// they were fetched in.
+    static func sectionOrder(of list: NSObject) -> [String] {
+      if let data = Runtime.object(list, "sectionIDsOrderingAsData") as? NSData {
+        return DatabaseRows.sectionOrder([UInt8](data as Data))
+      }
+      return Runtime.object(list, "sectionIDsOrdering").map(Runtime.identifiers) ?? []
+    }
+
+    /// The list's memberships, from the stored JSON or from `REMMemberships`, whichever this ReminderKit exposes;
+    /// nil when it exposes neither, or a shape this doesn't know.
+    static func memberships(of list: NSObject) -> StoredMemberships? {
+      let dataKey = "membershipsOfRemindersInSectionsAsData"
+      if list.responds(to: NSSelectorFromString(dataKey)) {
+        guard let data = Runtime.object(list, dataKey) as? NSData else { return StoredMemberships() }
+        return String(data: data as Data, encoding: .utf8).map { StoredMemberships(data: $0) }
+      }
+      let objectKey = "membershipsOfRemindersInSections"
+      guard list.responds(to: NSSelectorFromString(objectKey)) else { return nil }
+      guard let memberships = Runtime.object(list, objectKey) else { return StoredMemberships() }
+      guard let all = Runtime.object(memberships, "memberships").flatMap(Runtime.elements) else { return nil }
+      var entries: [SectionMemberships.Entry] = []
+      for case let membership as NSObject in all {
+        guard let member = Runtime.object(membership, "memberIdentifier") as? NSUUID,
+          let group = Runtime.object(membership, "groupIdentifier") as? NSUUID
+        else { return nil }
+        // An obsolete membership no longer puts the reminder in that section.
+        let isObsolete = (Runtime.object(membership, "isObsolete") as? NSNumber)?.boolValue ?? false
+        entries.append(
+          SectionMemberships.Entry(
+            reminderID: member.uuidString.uppercased(), sectionID: isObsolete ? "" : group.uuidString.uppercased(),
+            modifiedOn: (Runtime.object(membership, "modifiedOn") as? NSDate)?.timeIntervalSinceReferenceDate))
+      }
+      return StoredMemberships(entries: entries)
+    }
+
+    /// `reminderIDsOrdering` when the list's `sortingStyle` says it's sorted manually; nil otherwise, including
+    /// when this ReminderKit has neither.
+    static func manualReminderOrder(of list: NSObject) -> [String]? {
+      guard let style = Runtime.string(list, "sortingStyle"), style.lowercased() == "manual",
+        let ordering = Runtime.object(list, "reminderIDsOrdering")
+      else { return nil }
+      let identifiers = Runtime.identifiers(in: ordering)
+      return identifiers.isEmpty ? nil : identifiers
     }
 
     // MARK: Changing
@@ -321,6 +382,26 @@
 
     static func string(_ object: NSObject, _ key: String) -> String? {
       self.object(object, key) as? String
+    }
+
+    /// The members of an array, ordered set or set; nil for anything else.
+    static func elements(_ collection: NSObject) -> [Any]? {
+      if let array = collection as? NSArray { return array as? [Any] }
+      if let ordered = collection as? NSOrderedSet { return ordered.array }
+      if let set = collection as? NSSet { return set.allObjects }
+      return nil
+    }
+
+    /// Upper-case dashed UUIDs from a collection of `REMObjectID`s, `NSUUID`s or strings, skipping anything else.
+    static func identifiers(in collection: NSObject) -> [String] {
+      (elements(collection) ?? []).compactMap { element -> String? in
+        switch element {
+        case let uuid as NSUUID: uuid.uuidString.uppercased()
+        case let string as String: UUID(uuidString: string)?.uuidString.uppercased()
+        case let object as NSObject: (self.object(object, "uuid") as? NSUUID)?.uuidString.uppercased()
+        default: nil
+        }
+      }
     }
 
     /// An object's identifier, `objectID.uuid`, as an upper-case dashed UUID.

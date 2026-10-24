@@ -80,3 +80,26 @@ struct PersistedJSONTests {
     }
   }
 }
+
+@Suite("Section order and membership data from objects")
+struct SectionObjectsTests {
+  @Test("items follow the given identifiers, case-insensitively; the rest keep their order after them")
+  func arranged() {
+    let arranged = DatabaseRows.arranged(["a", "B", "c", "d"], by: ["D", "x", "b"]) { $0 }
+    #expect(arranged == ["d", "B", "a", "c"])
+    #expect(DatabaseRows.arranged(["a", "b"], by: []) { $0 } == ["a", "b"])
+  }
+
+  @Test("memberships handed over as objects become data in Reminders' format that reads back the same")
+  func encoded() throws {
+    let entries: [SectionMemberships.Entry] = [
+      .init(reminderID: "M1", sectionID: "G1", modifiedOn: 783_456_789.5), .init(reminderID: "M2", sectionID: "G2"),
+    ]
+    let stored = StoredMemberships(entries: entries)
+    #expect(
+      stored.data
+        == #"{"memberships":[{"groupID":"G1","memberID":"M1","modifiedOn":783456789.5},{"groupID":"G2","memberID":"M2"}],"minimumSupportedVersion":20230430}"#
+    )
+    #expect(try SectionMemberships(storedData: stored.data).entries == entries)
+  }
+}

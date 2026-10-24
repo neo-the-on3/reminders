@@ -39,6 +39,7 @@ public struct RemindersToolbox: Sendable {
       let listing = try await service.contents(
         ofList: arguments.string("list"),
         section: arguments.optionalString("section").flatMap { $0.isEmpty ? nil : $0 },
+        unsectioned: arguments.bool("unsectioned") ?? false,
         includeCompleted: arguments.bool("includeCompleted") ?? false)
       return RemindersResult(listing)
     case .createList:

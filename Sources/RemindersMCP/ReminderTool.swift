@@ -94,6 +94,8 @@ public enum ReminderTool: String, CaseIterable, Sendable {
       return JSONSchema.object(
         [
           "list": Self.listArgument, "section": JSONSchema.string("Only reminders in this section (fuzzy match)"),
+          "unsectioned": JSONSchema.boolean(
+            "Only reminders in no section (Reminders shows them under \"Others\"); not with section"),
           "includeCompleted": JSONSchema.boolean("Include completed reminders"),
         ],
         required: ["list"])

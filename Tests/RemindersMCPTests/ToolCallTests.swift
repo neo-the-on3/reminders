@@ -140,6 +140,12 @@ struct ToolCallTests {
     #expect(
       all["reminders"]?.arrayValue?.compactMap { $0.objectValue?["section"]?.stringValue } == ["Writing"])
     #expect(try await session.failure("reminders_list", ["list": "Work", "section": "Q4"]).code == .sectionNotFound)
+    let others = try await session.titles("reminders_list", ["list": "Work", "unsectioned": true])
+    #expect(others.count == 1)
+    #expect(!others.contains("Write report"))
+    #expect(
+      try await session.failure("reminders_list", ["list": "Work", "section": "writ", "unsectioned": true]).code
+        == .invalidArgument)
     await session.stop()
   }
 

@@ -38,11 +38,13 @@ struct ListContents: ConsoleCommand {
   @OptionGroup var globals: GlobalOptions
   @Argument(help: "List name (fuzzy matched)") var name: String
   @Option(help: "Only reminders in this section (fuzzy matched)") var section: String?
+  @Flag(help: "Only reminders in no section (shown under \"Others\")") var unsectioned = false
   @Flag(help: "Include completed reminders") var includeCompleted = false
 
   func run(in context: CommandContext) async throws {
     context.console.show(
-      try await context.service.contents(ofList: name, section: section, includeCompleted: includeCompleted))
+      try await context.service.contents(
+        ofList: name, section: section, unsectioned: unsectioned, includeCompleted: includeCompleted))
   }
 }
 

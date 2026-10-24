@@ -169,6 +169,15 @@ struct CommandExecutionTests {
     #expect(denied.errors.text.isEmpty)
   }
 
+  @Test("list --unsectioned needs sections, and doesn't go with --section")
+  func unsectionedOption() async throws {
+    let json = Harness()
+    #expect(try await json.run(["list", "Inbox", "--unsectioned", "--json"]) == 1)
+    #expect(json.errors.text.contains("NOT_IMPLEMENTED"))
+    #expect(try await json.run(["list", "Inbox", "--unsectioned", "--section", "A", "--json"]) == 1)
+    #expect(json.errors.text.contains("INVALID_ARGUMENT"))
+  }
+
   @Test("doctor shows only checks that apply; the original's --db and --sync are accepted and add nothing")
   func doctorChecks() async throws {
     let plain = Harness()
